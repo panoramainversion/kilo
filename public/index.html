@@ -56,27 +56,37 @@
 <main class="page" id="view"></main>
 
 <footer class="foot" id="foot">
-  <a class="foot-link" href="#/">时间线</a>
-  <span class="foot-dot">·</span>
-  <a class="foot-link" href="#/people">成员</a>
-  <span class="foot-dot">·</span>
-  <a class="foot-link" href="/feed.xml">RSS</a>
-  <span class="foot-spacer"></span>
-  <span class="foot-count" id="footCount"></span>
+  <div class="foot-row">
+    <div class="foot-nav">
+      <a class="foot-link" href="#/">时间线</a>
+      <span class="foot-dot">·</span>
+      <a class="foot-link" href="#/people">成员</a>
+      <span class="foot-dot">·</span>
+      <a class="foot-link" href="/feed.xml">RSS</a>
+    </div>
+    <span class="foot-spacer"></span>
+    <span class="foot-count" id="footCount"></span>
+  </div>
+  <div class="foot-note" id="footNote" hidden></div>
 </footer>
 
-<!-- 发布条 -->
-<div class="dock" id="dock" hidden>
-  <div class="dock-inner">
-    <div class="dock-thumbs" id="dockThumbs" hidden></div>
-    <textarea id="composer" rows="1" placeholder="写点什么…（Ctrl/⌘ + Enter 发布，可直接粘贴图片）" maxlength="5000"></textarea>
-    <div class="dock-actions">
+<!-- 发布：默认只露出右下角悬浮按钮 -->
+<div class="compose" id="dock" hidden>
+  <section class="composer" id="composerPanel" aria-label="发布新消息" hidden>
+    <div class="composer-head">
+      <span class="composer-title">写点什么</span>
+      <button class="icon-btn small" id="composeClose" title="收起" aria-label="收起"></button>
+    </div>
+    <div class="composer-thumbs" id="dockThumbs" hidden></div>
+    <textarea id="composer" rows="1" placeholder="写点什么…" maxlength="5000"></textarea>
+    <div class="composer-actions">
       <button class="icon-btn small" id="pickBtn" title="加图片"></button>
       <span class="counter" id="counter"></span>
       <button class="btn-primary" id="publishBtn" disabled>发布</button>
     </div>
-  </div>
-  <input type="file" id="filePicker" accept="image/*" multiple hidden />
+    <input type="file" id="filePicker" accept="image/*" multiple hidden />
+  </section>
+  <button class="compose-fab" id="composeBtn" title="发布新消息" aria-label="发布新消息" aria-expanded="false"></button>
 </div>
 
 <!-- 大图 -->

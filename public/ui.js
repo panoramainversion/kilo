@@ -37,6 +37,7 @@ const PATHS = {
   pin: '<path d="M9 3.8h6l-1 5 3 3.2H7l3-3.2-1-5Z"/><path d="M12 12v8"/>',
   trash: '<path d="M4.6 6.8h14.8"/><path d="M9.2 6.8V4.6h5.6v2.2"/><path d="M6.6 6.8 7.6 20h8.8l1-13.2"/>',
   comment: '<path d="M20 12.4c0 3.7-3.6 6.6-8 6.6a9.6 9.6 0 0 1-2.6-.35L5 20.4l1-3.3A6.3 6.3 0 0 1 4 12.4c0-3.7 3.6-6.6 8-6.6s8 2.9 8 6.6Z"/>',
+  reply: '<path d="M9.6 7.4 4.8 12l4.8 4.6"/><path d="M5.2 12h8.4a5 5 0 0 1 5 5v1.2"/>',
   image: '<rect x="3.6" y="5" width="16.8" height="14" rx="2.4"/><circle cx="9" cy="10.2" r="1.5"/><path d="m4.4 17.4 4.6-4.2 3.4 3 3-2.6 4.2 3.8"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   chevron: '<path d="m9 5 7 7-7 7"/>',
@@ -61,7 +62,7 @@ export function icon(name, size = 16) {
 
 /* ── 正文渲染（Markdown 子集，全部走 DOM，不拼 HTML）───────── */
 
-const INLINE = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`|#[^\s#<>]{1,30}|https?:\/\/[^\s<>"）】]+)/g;
+const INLINE = /(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`|#[^\s#<>]{1,30}|https?:\/\/[^\s<>"）】]+)/g;
 
 function inline(text, out) {
   let last = 0;
@@ -70,7 +71,15 @@ function inline(text, out) {
   while ((m = INLINE.exec(text))) {
     if (m.index > last) out.push(document.createTextNode(text.slice(last, m.index)));
     const tok = m[0];
-    if (tok.startsWith('**')) {
+    const link = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(tok);
+    if (link) {
+      out.push(el('a', {
+        href: link[2],
+        target: '_blank',
+        rel: 'noopener noreferrer nofollow',
+        text: link[1],
+      }));
+    } else if (tok.startsWith('**')) {
       out.push(el('strong', { text: tok.slice(2, -2) }));
     } else if (tok.startsWith('`')) {
       out.push(el('code', { text: tok.slice(1, -1) }));
@@ -181,9 +190,12 @@ export function toast(msg, ms = 2200) {
 }
 
 let modalCloser = null;
+let modalReturnFocus = null;
 export function openModal(build) {
   const wrap = document.getElementById('modal');
   const card = document.getElementById('modalCard');
+  if (wrap.hidden) modalReturnFocus = document.activeElement;
+  if (modalCloser) document.removeEventListener('keydown', modalCloser);
   clear(card);
   const api = { close: closeModal, card };
   const node = build(api);
@@ -201,6 +213,9 @@ export function closeModal() {
   wrap.hidden = true;
   if (modalCloser) document.removeEventListener('keydown', modalCloser);
   modalCloser = null;
+  const back = modalReturnFocus;
+  modalReturnFocus = null;
+  if (back && document.contains(back) && typeof back.focus === 'function') back.focus();
 }
 
 export function confirmModal(title, sub, okText = '确定', danger = false) {

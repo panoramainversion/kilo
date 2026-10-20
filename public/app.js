@@ -24,6 +24,10 @@ const state = {
 
 const view = () => document.getElementById('view');
 
+function isTouchUi() {
+  return window.matchMedia('(hover: none)').matches;
+}
+
 /* ── 主题 ─────────────────────────────────────────────────── */
 
 const THEMES = ['auto', 'light', 'dark'];
@@ -76,8 +80,18 @@ function applySite(site) {
   t.hidden = false;
   document.getElementById('titleSkeleton').hidden = true;
   document.getElementById('siteDesc').textContent = site.site_desc || '';
+  renderFootNote();
   try { localStorage.setItem('memo2-site', JSON.stringify(site)); } catch { /* ignore */ }
   applyTheme();
+}
+
+function renderFootNote() {
+  const box = document.getElementById('footNote');
+  if (!box) return;
+  const text = (state.site?.footer_text || '').trim();
+  clear(box);
+  box.hidden = !text;
+  if (text) box.append(renderBody(text));
 }
 
 /* ── 顶栏 ─────────────────────────────────────────────────── */
@@ -121,19 +135,27 @@ function imageGrid(images) {
 
 /* ── 评论 ─────────────────────────────────────────────────── */
 
-function commentNode(c, canDel) {
+function canDeleteComment(c) {
+  return !!(state.me && (c.user.username === state.me.username || state.me.role === 'admin'));
+}
+
+function commentNode(c, onDeleted) {
   return el('div', { class: 'comment' },
     avatarEl(c.user, 'sm'),
     el('div', { class: 'comment-main' },
       el('div', { class: 'comment-head' },
         el('b', { text: c.user.display_name }),
         el('span', { text: relTime(c.created_at) }),
-        canDel ? el('button', {
+        onDeleted && canDeleteComment(c) ? el('button', {
           class: 'comment-del',
           text: '删除',
           onclick: async () => {
             if (!(await confirmModal('删掉这条评论？', '', '删除', true))) return;
-            try { await api.deleteComment(c.id); toast('已删除'); route(); } catch (e) { toast(e.message); }
+            try {
+              await api.deleteComment(c.id);
+              onDeleted(c);
+              toast('已删除');
+            } catch (e) { toast(e.message); }
           },
         }) : null,
       ),
@@ -142,34 +164,61 @@ function commentNode(c, canDel) {
   );
 }
 
-function commentForm(note, onDone) {
-  if (!state.me || !state.site?.comments_enabled) return null;
-  const input = el('input', { placeholder: '说点什么…', maxlength: '1000' });
+function excerpt(text, max = 70) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  return s.length > max ? s.slice(0, max) + '…' : s;
+}
+
+function replyDialog(note, onAdded) {
+  if (!state.me || !state.site?.comments_enabled) return;
+  const ta = el('textarea', {
+    class: 'textarea',
+    rows: '4',
+    maxlength: '1000',
+    placeholder: isTouchUi() ? '回复…' : '回复…（Ctrl/⌘ + Enter 发送）',
+  });
+  const counter = el('span', { class: 'counter', text: '0 / 1000' });
+  const sendBtn = el('button', { class: 'btn-primary', text: '发送', disabled: true });
+  const sync = () => {
+    counter.textContent = `${ta.value.length} / 1000`;
+    sendBtn.disabled = !ta.value.trim();
+  };
+  ta.addEventListener('input', sync);
   const send = async () => {
-    const v = input.value.trim();
-    if (!v) return;
-    input.disabled = true;
+    const content = ta.value.trim();
+    if (!content || sendBtn.disabled) return;
+    sendBtn.disabled = true;
+    sendBtn.textContent = '发送中…';
     try {
-      await api.addComment(note.id, { content: v });
-      input.value = '';
-      toast('评论已发布');
-      onDone && onDone();
+      const { comment } = await api.addComment(note.id, { content });
+      closeModal();
+      onAdded(comment);
+      toast('回复已发布');
     } catch (e) {
       toast(e.message);
-    } finally {
-      input.disabled = false;
+      sendBtn.disabled = false;
+      sendBtn.textContent = '发送';
     }
   };
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
-  return el('div', { class: 'comment-form' },
-    input,
-    el('button', { class: 'btn-primary', onclick: send, text: '发送' }),
-  );
+  ta.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); send(); }
+  });
+  sendBtn.addEventListener('click', send);
+  openModal(({ close }) => el('div', {},
+    el('h2', { class: 'modal-title', text: `回复 ${note.user.display_name}` }),
+    note.content ? el('div', { class: 'reply-quote', text: excerpt(note.content) }) : null,
+    ta,
+    el('div', { class: 'reply-actions' },
+      counter,
+      el('button', { class: 'btn-ghost', text: '取消', onclick: close }),
+      sendBtn,
+    ),
+  ));
 }
 
 /* ── 条目卡片 ─────────────────────────────────────────────── */
 
-function noteCard(note, i) {
+function noteCard(note, i, full = false) {
   const canEdit = state.me && (state.me.id === note.user.id || state.me.role === 'admin');
   const tools = canEdit ? el('div', { class: 'note-tools' },
     el('button', { class: 'tool-btn', title: '编辑', onclick: () => editNote(note) }, icon('pencil', 15)),
@@ -185,17 +234,73 @@ function noteCard(note, i) {
       title: '删除',
       onclick: async () => {
         if (!(await confirmModal('删掉这条？', '删了就找不回来了。', '删除', true))) return;
-        try { await api.deleteNote(note.id); toast('已删除'); route(); } catch (e) { toast(e.message); }
+        try {
+          await api.deleteNote(note.id);
+          toast('已删除');
+          if (location.hash.startsWith('#/n/')) location.hash = '#/';
+          else route();
+        } catch (e) { toast(e.message); }
       },
     }, icon('trash', 15)),
   ) : null;
 
-  const shown = note.comments || [];
-  const rest = (note.comment_count || 0) - shown.length;
+  const countBtn = el('button', {
+    class: 'comment-count',
+    title: '查看评论',
+    onclick: () => { if (!location.hash.startsWith(`#/n/${note.id}`)) location.hash = `#/n/${note.id}`; },
+  }, icon('comment', 15), `${note.comment_count || 0} 条评论`);
+
+  const commentsBox = el('div', { class: 'comments' });
+  const syncCount = () => {
+    clear(countBtn);
+    countBtn.append(icon('comment', 15), `${note.comment_count || 0} 条评论`);
+  };
+  const paintComments = () => {
+    clear(commentsBox);
+    const list = note.comments || [];
+    const rest = Math.max(0, (note.comment_count || 0) - list.length);
+    commentsBox.hidden = !list.length && rest <= 0;
+    if (commentsBox.hidden) return;
+    list.forEach((c) => commentsBox.append(commentNode(c, onDeleted)));
+    if (rest > 0) {
+      commentsBox.append(el('button', {
+        class: 'comments-more',
+        onclick: () => { location.hash = `#/n/${note.id}`; },
+        text: `查看全部 ${note.comment_count} 条评论`,
+      }));
+    }
+  };
+  const onDeleted = (removed) => {
+    note.comment_count = Math.max(0, (note.comment_count || 0) - 1);
+    note.comments = (note.comments || []).filter((c) => c.id !== removed.id);
+    syncCount();
+    paintComments();
+  };
+  paintComments();
+
+  const replyBtn = state.site?.comments_enabled ? el('button', {
+    class: 'reply-btn',
+    title: '回复',
+    onclick: () => {
+      if (!state.me) {
+        toast('登录后才能回复');
+        location.hash = '#/login';
+        return;
+      }
+      replyDialog(note, (comment) => {
+        note.comment_count = (note.comment_count || 0) + 1;
+        const list = [...(note.comments || []), comment];
+        note.comments = full ? list : list.slice(-3);
+        syncCount();
+        paintComments();
+      });
+    },
+  }, icon('reply', 15), '回复') : null;
 
   return el('article', {
     class: 'note' + (state.flashId === note.id ? ' flash' : ''),
     style: `--i:${Math.min(i, 10)}`,
+    'data-note-id': note.id,
   },
     el('header', { class: 'note-head' },
       avatarEl(note.user),
@@ -215,25 +320,14 @@ function noteCard(note, i) {
     note.content ? el('div', { class: 'note-body' }, renderBody(note.content)) : null,
     note.images && note.images.length ? imageGrid(note.images) : null,
     el('div', { class: 'note-foot' },
-      el('button', { onclick: () => { location.hash = `#/n/${note.id}`; } },
-        icon('comment', 15),
-        `${note.comment_count || 0} 条评论`,
-      ),
+      countBtn,
       el('button', {
         onclick: () => { copyText(`${location.origin}/#/n/${note.id}`).then((ok) => toast(ok ? '链接已复制' : '复制失败')); },
         text: '分享',
       }),
+      replyBtn,
     ),
-    (shown.length || state.site?.comments_enabled) ? el('div', { class: 'comments' },
-      shown.map((c) => commentNode(c, state.me && (c.user.username === state.me.username || state.me.role === 'admin'))),
-      rest > 0 ? el('button', {
-        class: 'foot-link',
-        style: 'font-size:13px;padding:4px 0;background:none;border:0;cursor:pointer',
-        onclick: () => { location.hash = `#/n/${note.id}`; },
-        text: `查看全部 ${note.comment_count} 条评论`,
-      }) : null,
-      commentForm(note, route),
-    ) : null,
+    commentsBox,
   );
 }
 
@@ -391,7 +485,7 @@ async function renderTimeline() {
       el('p', { class: 'state-main', text: state.filter.tag || state.filter.q ? '没有找到' : '这里还空着' }),
       el('p', {
         class: 'state-sub',
-        text: state.filter.tag || state.filter.q ? '换个词试试。' : (state.me ? '底部写点什么，第一条就是你的。' : '第一句话往往最难写。'),
+        text: state.filter.tag || state.filter.q ? '换个词试试。' : (state.me ? '点右下角的按钮，第一条就是你的。' : '第一句话往往最难写。'),
       }),
       !state.me && !state.site?.needs_setup
         ? el('div', { class: 'btn-row' },
@@ -414,19 +508,7 @@ async function renderNote(id) {
     clear(v);
     v.append(el('a', { class: 'foot-link', href: '#/', text: '← 回时间线' }));
     const wrap = el('div', { style: 'margin-top:14px' });
-    const card = noteCard({ ...note, comment_count: note.comments.length }, 0);
-    // 详情页展示全部评论
-    const comments = card.querySelector('.comments');
-    if (comments) {
-      clear(comments);
-      if (note.comments.length) {
-        const list = el('div', {});
-        note.comments.forEach((c) => list.append(commentNode(c,
-          state.me && (c.user.username === state.me.username || state.me.role === 'admin'))));
-        comments.append(list);
-      }
-      comments.append(commentForm(note, () => renderNote(id)));
-    }
+    const card = noteCard({ ...note, comment_count: note.comments.length }, 0, true);
     wrap.append(card);
     v.append(wrap);
     document.getElementById('footCount').textContent = '';
@@ -990,7 +1072,7 @@ async function renderAdminSite(pane) {
     el('p', { class: 'sub', text: '改完点保存，全站立即生效，不用重新部署。' }),
     mkText('site_title', '站点名', '碎碎念'),
     mkText('site_desc', '一句话介绍', '一个人的房间。想到什么写什么。'),
-    mkText('footer_text', '页脚备注（可空）', '© 2026'),
+    mkText('footer_text', '页脚备注（可空，支持 [文字](链接)）', '© 2026 · [关于](https://example.com)'),
   ));
 
   pane.append(el('div', { class: 'card' },
@@ -1265,21 +1347,47 @@ async function uploadFile(file) {
 
 function renderDock() {
   const dock = document.getElementById('dock');
-  dock.hidden = !state.me;
-  if (!state.me) return;
   const pick = document.getElementById('pickBtn');
   const on = !!state.site?.images_enabled;
   pick.hidden = !on;
   pick.title = on ? '加图片' : (state.site?.images_ready ? '图片功能已关闭' : '图片存储未配置');
-  document.getElementById('composer').placeholder = on
-    ? '写点什么…（Ctrl/⌘ + Enter 发布，可直接粘贴图片）'
-    : '写点什么…（Ctrl/⌘ + Enter 发布）';
   const ta = document.getElementById('composer');
+  ta.placeholder = isTouchUi()
+    ? '写点什么…'
+    : on
+      ? '写点什么…（Ctrl/⌘ + Enter 发布，可直接粘贴图片）'
+      : '写点什么…（Ctrl/⌘ + Enter 发布）';
   const draft = localStorage.getItem('memo2-draft') || '';
   if (!ta.value && draft) ta.value = draft;
-  autoGrow();
+  dock.hidden = !state.me;
+  if (!state.me) { setComposerOpen(false); return; }
   updateCounter();
   paintThumbs();
+}
+
+function setComposerOpen(open) {
+  const dock = document.getElementById('dock');
+  const panel = document.getElementById('composerPanel');
+  const fab = document.getElementById('composeBtn');
+  if (!dock || !panel || !fab || (open && dock.hidden)) return;
+  fab.classList.remove('tucked');
+  panel.hidden = !open;
+  fab.hidden = open;
+  fab.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    autoGrow();
+    document.getElementById('composer')?.focus();
+  } else {
+    panel.classList.remove('dragover');
+    if (panel.contains(document.activeElement)) fab.focus();
+  }
+}
+
+function syncDraftMark() {
+  const ta = document.getElementById('composer');
+  const fab = document.getElementById('composeBtn');
+  if (!ta || !fab) return;
+  fab.classList.toggle('has-draft', !!(ta.value.trim() || state.pending.length));
 }
 
 function autoGrow() {
@@ -1296,6 +1404,7 @@ function updateCounter() {
   c.classList.toggle('warn', n > 4800);
   const btn = document.getElementById('publishBtn');
   btn.disabled = !ta.value.trim() && !state.pending.some((p) => p.key);
+  syncDraftMark();
 }
 
 function paintThumbs() {
@@ -1313,6 +1422,7 @@ function paintThumbs() {
     );
     box.append(node);
   });
+  syncDraftMark();
 }
 
 async function addFiles(files) {
@@ -1368,6 +1478,7 @@ async function publish() {
     updateCounter();
     state.flashId = note.id;
     toast('发出去了');
+    setComposerOpen(false);
     if (location.hash && location.hash !== '#/') location.hash = '#/';
     else route();
   } catch (e) {
@@ -1382,6 +1493,7 @@ async function publish() {
 function initDock() {
   const ta = document.getElementById('composer');
   const dock = document.getElementById('dock');
+  const panel = document.getElementById('composerPanel');
   const picker = document.getElementById('filePicker');
 
   ta.addEventListener('input', () => {
@@ -1389,7 +1501,6 @@ function initDock() {
     updateCounter();
     localStorage.setItem('memo2-draft', ta.value);
   });
-  ta.addEventListener('focus', () => dock.classList.add('focused'));
   ta.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); publish(); }
   });
@@ -1403,17 +1514,54 @@ function initDock() {
   picker.addEventListener('change', () => addFiles(picker.files));
   document.getElementById('publishBtn').addEventListener('click', publish);
 
+  document.getElementById('composeBtn').addEventListener('click', () => setComposerOpen(true));
+  document.getElementById('composeClose').addEventListener('click', () => setComposerOpen(false));
+
   ['dragenter', 'dragover'].forEach((ev) => ta.addEventListener(ev, (e) => {
     e.preventDefault();
-    dock.classList.add('dragover');
+    panel.classList.add('dragover');
   }));
   ['dragleave', 'drop'].forEach((ev) => ta.addEventListener(ev, (e) => {
     e.preventDefault();
-    dock.classList.remove('dragover');
+    panel.classList.remove('dragover');
   }));
   ta.addEventListener('drop', (e) => {
     const files = Array.from(e.dataTransfer?.files || []);
     if (files.length) addFiles(files);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!panel.hidden && !dock.contains(e.target)) setComposerOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !panel.hidden) setComposerOpen(false);
+  });
+
+  // 窄屏上按钮会压到正文，往下读时先收起来，往回翻再出现
+  let lastY = window.scrollY;
+  let ticking = false;
+  const syncFab = () => {
+    const fab = document.getElementById('composeBtn');
+    const y = window.scrollY;
+    const dy = y - lastY;
+    const nearBottom = y >= document.documentElement.scrollHeight - window.innerHeight - 160;
+    if (!panel.hidden || window.innerWidth >= 900) {
+      fab.classList.remove('tucked');
+    } else if (y > 200 && dy > 8 && !nearBottom) {
+      fab.classList.add('tucked');
+    } else if (dy < -8 || y < 120 || nearBottom) {
+      fab.classList.remove('tucked');
+    }
+    lastY = y;
+  };
+  window.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => { ticking = false; syncFab(); });
+  }, { passive: true });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 900) document.getElementById('composeBtn').classList.remove('tucked');
+    lastY = window.scrollY;
   });
 }
 
@@ -1514,12 +1662,14 @@ function initHeader() {
   });
   document.getElementById('themeBtn').addEventListener('click', cycleTheme);
   document.getElementById('pickBtn').append(icon('image', 17));
+  document.getElementById('composeBtn').append(icon('pencil', 20));
+  document.getElementById('composeClose').append(icon('x', 15));
 
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea')) return;
     if (e.key === 'n' && state.me) {
       e.preventDefault();
-      document.getElementById('composer')?.focus();
+      setComposerOpen(true);
     }
   });
 
