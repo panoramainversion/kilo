@@ -282,6 +282,38 @@ function sentinel() {
   return s;
 }
 
+function dayStamp(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((startOf(now) - startOf(d)) / 86400000);
+  return {
+    key: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`,
+    label: `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`,
+    name: diff === 0 ? '今天' : diff === 1 ? '昨天'
+      : ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()],
+  };
+}
+
+function appendNotes(box, notes, start) {
+  notes.forEach((n, i) => {
+    const d = dayStamp(n.created_at);
+    if (d.key !== box._dayKey) {
+      const day = el('section', { class: 'day' },
+        el('div', { class: 'day-side' },
+          el('div', { class: 'day-label', text: d.label }),
+          el('div', { class: 'day-num', text: d.name }),
+        ),
+        el('div', { class: 'day-notes' }),
+      );
+      box.append(day);
+      box._dayKey = d.key;
+      box._dayNotes = day.querySelector('.day-notes');
+    }
+    box._dayNotes.append(noteCard(n, start + i));
+  });
+}
+
 async function loadMore() {
   if (state.loading || state.done) return;
   state.loading = true;
@@ -305,7 +337,7 @@ async function loadMore() {
     if (tail) tail.remove();
     const start = state.notes.length;
     state.notes.push(...batch);
-    batch.forEach((n, i) => box.append(noteCard(n, start + i)));
+    appendNotes(box, batch, start);
     box.append(el('div', { class: 'tail', style: 'padding:20px 0;text-align:center' },
       state.done
         ? (state.notes.length ? el('span', { style: 'font-size:13px;color:var(--faint)', text: '到底了' }) : null)
