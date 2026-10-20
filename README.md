@@ -6,12 +6,13 @@
 
 <table>
   <tr>
-    <td width="50%" valign="top"><img src="docs/screenshot-light.png" alt="浅色主题"></td>
-    <td width="50%" valign="top"><img src="docs/screenshot-dark.png" alt="深色主题"></td>
+    <td width="66%" valign="top"><img src="docs/screenshot-light.png" alt="桌面端，浅色主题"></td>
+    <td width="34%" valign="top"><img src="docs/screenshot-dark.png" alt="手机端，深色主题"></td>
   </tr>
 </table>
 
-左：浅色。右：深色。同一条时间线，日期分组、头像、九宫格图片、评论入口都在。
+左：桌面端，浅色，日期在左栏吸顶。右：手机端，深色，日期折到条目上方。
+头像、三图排版、置顶和评论都在。图为演示数据。
 
 ---
 
