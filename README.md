@@ -208,7 +208,7 @@ kilo/
 
 | 项 | 值 |
 | --- | --- |
-| Agent | WorkBuddy |
+| Agent | Qoder CN |
 | 模型 | DeepSeek V4.1 Flash |
 
 代码经过实机验证：本地 `wrangler dev` 跑通 44 项接口测试，线上对 **KV 和 B2** 两条链路
