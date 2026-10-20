@@ -1,0 +1,18 @@
+{
+  "name": "kilo",
+  "version": "2.0.0",
+  "private": true,
+  "description": "多人微博客，跑在 Cloudflare Workers + D1 + KV / B2 / R2 上",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "db:init": "wrangler d1 execute kilo --remote --file=./schema.sql",
+    "db:init:local": "wrangler d1 execute kilo --local --file=./schema.sql",
+    "bucket:create": "wrangler r2 bucket create kilo-images"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "aws4fetch": "^1.0.20"
+  }
+}

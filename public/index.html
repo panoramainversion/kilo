@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<title>kilo</title>
+<meta name="description" content="多用户微博客" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#f4f1ec" id="themeColor" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23b84200'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23f4f1ec'/%3E%3C/svg%3E" />
+<script>
+/* 首屏前先套主题与配色，避免闪一下默认色 */
+(function () {
+  try {
+    var m = localStorage.getItem('memo2-theme') || 'auto';
+    var dark = m === 'dark' || (m === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    var s = JSON.parse(localStorage.getItem('memo2-site') || 'null');
+    if (s) {
+      var r = document.documentElement.style;
+      if (s.bg_light) r.setProperty('--site-bg-light', s.bg_light);
+      if (s.fg_light) r.setProperty('--site-fg-light', s.fg_light);
+      if (s.accent_light) r.setProperty('--site-accent-light', s.accent_light);
+      if (s.bg_dark) r.setProperty('--site-bg-dark', s.bg_dark);
+      if (s.fg_dark) r.setProperty('--site-fg-dark', s.fg_dark);
+      if (s.accent_dark) r.setProperty('--site-accent-dark', s.accent_dark);
+      if (s.site_title) document.title = s.site_title;
+    }
+  } catch (e) {}
+})();
+</script>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="#/"><span class="skeleton sk-title" id="titleSkeleton"></span><h1 class="site-title" id="siteTitle" hidden></h1></a>
+    <div class="top-actions">
+      <button class="icon-btn" id="searchBtn" title="搜索" aria-label="搜索"></button>
+      <button class="icon-btn" id="themeBtn" title="切换主题" aria-label="切换主题"></button>
+      <a class="me-slot" id="meSlot" href="#/login" title="登录"></a>
+    </div>
+  </div>
+  <p class="site-desc" id="siteDesc"></p>
+  <div class="search-bar" id="searchBar" hidden>
+    <input class="search-input" id="searchInput" placeholder="找点什么…（回车搜索，Esc 关闭）" />
+  </div>
+</header>
+
+<main class="page" id="view"></main>
+
+<footer class="foot" id="foot">
+  <a class="foot-link" href="#/">时间线</a>
+  <span class="foot-dot">·</span>
+  <a class="foot-link" href="#/people">成员</a>
+  <span class="foot-dot">·</span>
+  <a class="foot-link" href="/feed.xml">RSS</a>
+  <span class="foot-spacer"></span>
+  <span class="foot-count" id="footCount"></span>
+</footer>
+
+<!-- 发布条 -->
+<div class="dock" id="dock" hidden>
+  <div class="dock-inner">
+    <div class="dock-thumbs" id="dockThumbs" hidden></div>
+    <textarea id="composer" rows="1" placeholder="写点什么…（Ctrl/⌘ + Enter 发布，可直接粘贴图片）" maxlength="5000"></textarea>
+    <div class="dock-actions">
+      <button class="icon-btn small" id="pickBtn" title="加图片"></button>
+      <span class="counter" id="counter"></span>
+      <button class="btn-primary" id="publishBtn" disabled>发布</button>
+    </div>
+  </div>
+  <input type="file" id="filePicker" accept="image/*" multiple hidden />
+</div>
+
+<!-- 大图 -->
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lb-close" id="lbClose" aria-label="关闭">✕</button>
+  <button class="lb-nav lb-prev" id="lbPrev" aria-label="上一张">‹</button>
+  <img class="lb-img" id="lbImg" alt="" />
+  <button class="lb-nav lb-next" id="lbNext" aria-label="下一张">›</button>
+  <span class="lb-count" id="lbCount"></span>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<div class="modal" id="modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" id="modalCard" role="dialog" aria-modal="true"></div>
+</div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

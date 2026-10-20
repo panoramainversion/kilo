@@ -1,0 +1,12 @@
+node_modules/
+.wrangler/
+.dev.vars
+.DS_Store
+
+# 本机私有：真实绑定、初始化令牌、运维记录、备份文件
+wrangler.toml
+.setup-token.txt
+.admin-password.txt
+部署与运维.md
+backup-*.json
+*.zip

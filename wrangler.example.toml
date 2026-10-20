@@ -1,0 +1,58 @@
+# kilo · Cloudflare Workers + D1 + KV / B2 / R2
+# 先复制成 wrangler.toml，再填自己的资源 ID（wrangler.toml 已被 .gitignore 排除）：
+#   cp wrangler.example.toml wrangler.toml
+name = "kilo"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# 不绑域名就用 workers.dev；绑域名再取消注释并换成自己的域名。
+# 前提：该域名（或上级 zone）已托管在同一个 Cloudflare 账号下。
+# [[routes]]
+# pattern = "kilo.example.com"
+# custom_domain = true
+
+# ── 前端静态资源 ─────────────────────────────────────────────
+# run_worker_first：这几个前缀先交给 Worker，别让 SPA 兜底把 /api 吃掉。
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/i/*", "/feed.xml"]
+
+# ── 数据库 ──────────────────────────────────────────────────
+[[d1_databases]]
+binding = "DB"
+database_name = "kilo"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# ── 图片存储 ────────────────────────────────────────────────
+# 默认 Workers KV（绑定 IMAGE_KV）。不用 KV 就删掉这一段。
+[[kv_namespaces]]
+binding = "IMAGE_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# 想加 R2：先在后台开通 R2、建桶，再取消下面三行注释。
+# [[r2_buckets]]
+# binding = "IMAGES"
+# bucket_name = "kilo-images"
+
+# ── 站点变量 ────────────────────────────────────────────────
+[vars]
+# RSS 时间显示的时区偏移（+8 即北京时间）
+SITE_TZ_OFFSET = "8"
+# 用户总数上限（含管理员），后台也能改
+MAX_USERS = "8"
+
+# 图片存储：auto | b2 | kv | r2。后台「图片 → 存储方式」可以覆盖这里。
+IMAGE_STORAGE = "kv"
+
+# 用 B2 时把桶名换成自己的。endpoint / region 按 B2 控制台显示填。
+B2_BUCKET = "your-bucket"
+B2_ENDPOINT = "https://s3.us-east-005.backblazeb2.com"
+B2_REGION = "us-east-005"
+
+# 密钥不要写在这里，用 wrangler secret put 设置：
+#   npx wrangler secret put SESSION_SECRET
+#   npx wrangler secret put SETUP_TOKEN      # 首次初始化管理员用
+#   npx wrangler secret put B2_KEY_ID        # 用 B2 时才需要
+#   npx wrangler secret put B2_APP_KEY
