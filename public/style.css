@@ -956,54 +956,6 @@ body {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px color-mix(in srgb, var(--fg) 52%, transparent);
 }
 .title-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.title-custom-panel {
-  display: grid;
-  gap: 7px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  max-width: 320px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--fg) 3%, var(--bg));
-}
-.title-custom-panel[hidden] { display: none; }
-.title-custom-row {
-  display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) 54px;
-  align-items: center;
-  gap: 9px;
-}
-.title-custom-key { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
-.title-custom-range {
-  width: 100%;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--custom-color, var(--fg));
-  cursor: pointer;
-}
-.title-custom-num {
-  width: 100%;
-  padding: 3px 4px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--fg);
-  font: inherit;
-  font-family: var(--mono);
-  font-size: 12px;
-  text-align: center;
-  outline: none;
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-.title-custom-num::-webkit-outer-spin-button,
-.title-custom-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.title-custom-num:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
-.title-random.is-open {
-  color: var(--fg);
-  border-color: color-mix(in srgb, var(--fg) 38%, transparent);
-  background: color-mix(in srgb, var(--fg) 7%, transparent);
-}
 .title-preview {
   display: flex;
   align-items: center;
@@ -1435,10 +1387,6 @@ body {
   .foot { padding: 20px 18px calc(84px + env(safe-area-inset-bottom)); }
   .note { padding: 16px 0; }
   .note-body { font-size: 16px; line-height: 1.75; }
-  .title-custom-panel { max-width: none; padding: 12px; }
-  .title-custom-row { grid-template-columns: 16px minmax(0, 1fr) 58px; gap: 10px; }
-  .title-custom-range { height: 24px; }
-  .title-custom-num { min-height: 34px; font-size: 16px; }
   .imgs:not(.full).n1 button img { max-height: 50vh; }
   .imgs.full.n1 button img { max-height: 62vh; }
   .compose-shell { padding: max(16vh, 88px) 14px 14px; }

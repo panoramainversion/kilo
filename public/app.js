@@ -814,64 +814,19 @@ async function renderMe() {
       onclick: () => { titleColorValue = c.value; syncTitleEditor(); },
     });
   });
-  // 自定义颜色：点开就是 R/G/B 三个值，不再套一层系统取色器
-  const customPanel = el('div', {
-    class: 'title-custom-panel',
-    id: 'titleCustomPanel',
-    hidden: true,
-  });
-  const customChannels = {};
-  const asHex = (n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
-  const rgbOf = (hex) => {
-    const v = safeTitleColor(hex) || DEFAULT_TITLE_COLOR;
-    return [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
-  };
-  const applyChannel = (index, raw) => {
-    const n = Number.parseInt(raw, 10);
-    if (!Number.isFinite(n)) return;
-    const rgb = rgbOf(titleColorValue);
-    rgb[index] = Math.max(0, Math.min(255, n));
-    titleColorValue = '#' + rgb.map(asHex).join('');
-    syncTitleEditor();
-  };
-  ['R', 'G', 'B'].forEach((name, index) => {
-    const range = el('input', {
-      type: 'range',
-      min: '0',
-      max: '255',
-      step: '1',
-      class: 'title-custom-range',
-      'aria-label': `${name} 通道`,
-    });
-    const num = el('input', {
-      type: 'number',
-      min: '0',
-      max: '255',
-      step: '1',
-      class: 'title-custom-num',
-      'aria-label': `${name} 通道数值`,
-    });
-    range.addEventListener('input', () => applyChannel(index, range.value));
-    num.addEventListener('input', () => applyChannel(index, num.value));
-    customChannels[name] = { range, num };
-    customPanel.append(el('label', { class: 'title-custom-row' },
-      el('span', { class: 'title-custom-key', text: name }),
-      range,
-      num,
-    ));
+  const customColorInput = el('input', {
+    type: 'color',
+    class: 'file-hidden',
+    value: safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR,
+    'aria-label': '自定义头衔颜色',
   });
   const customColorBtn = el('button', {
     type: 'button',
     class: 'title-random title-custom',
     title: '自定义颜色',
-    'aria-expanded': 'false',
-    'aria-controls': 'titleCustomPanel',
     onclick: () => {
-      const open = customPanel.hidden;
-      customPanel.hidden = !open;
-      customColorBtn.setAttribute('aria-expanded', String(open));
-      customColorBtn.classList.toggle('is-open', open);
-      syncCustomPanel();
+      customColorInput.value = safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR;
+      customColorInput.click();
     },
   }, icon('palette', 14), '自定义');
   const randomColorBtn = el('button', {
@@ -901,22 +856,11 @@ async function renderMe() {
       btn.classList.toggle('is-active', active);
       btn.setAttribute('aria-pressed', String(active));
     });
-    syncCustomPanel();
   };
-  const syncCustomPanel = () => {
-    const color = safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR;
-    const rgb = rgbOf(color);
-    customPanel.style.setProperty('--custom-color', color);
-    ['R', 'G', 'B'].forEach((name, index) => {
-      const { range, num } = customChannels[name];
-      const v = String(rgb[index]);
-      if (range.value !== v) range.value = v;
-      if (num.value !== v) num.value = v;
-    });
-  };
-  for (const { num } of Object.values(customChannels)) {
-    num.addEventListener('blur', syncCustomPanel);
-  }
+  customColorInput.addEventListener('input', () => {
+    titleColorValue = customColorInput.value;
+    syncTitleEditor();
+  });
   nameInput.addEventListener('input', () => {
     previewName.textContent = nameInput.value.trim() || me.display_name;
   });
@@ -1001,10 +945,10 @@ async function renderMe() {
         el('div', { class: 'title-color-actions' },
           customColorBtn,
           randomColorBtn,
+          customColorInput,
         ),
       ),
       el('div', { class: 'title-swatches', role: 'group', 'aria-label': '头衔颜色' }, swatches),
-      customPanel,
       titlePreview,
     ),
     el('div', { class: 'btn-row' },
