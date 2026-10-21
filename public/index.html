@@ -29,6 +29,7 @@
       if (s.bg_dark) r.setProperty('--site-bg-dark', s.bg_dark);
       if (s.fg_dark) r.setProperty('--site-fg-dark', s.fg_dark);
       if (s.accent_dark) r.setProperty('--site-accent-dark', s.accent_dark);
+      if (s.image_width) r.setProperty('--img-width', s.image_width + '%');
       if (s.site_title) document.title = s.site_title;
     }
   } catch (e) {}

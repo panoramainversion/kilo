@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS = {
   image_storage: 'auto',
   max_users: '8',
   max_image_mb: '3',
+  image_width: '30',
 };
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -62,6 +63,11 @@ export async function saveSettings(env, patch) {
     if (k === 'max_image_mb') {
       const n = Number.parseInt(v, 10);
       if (!Number.isFinite(n) || n < 1 || n > 10) continue;
+      v = String(n);
+    }
+    if (k === 'image_width') {
+      const n = Number.parseInt(v, 10);
+      if (!Number.isFinite(n) || n < 10 || n > 100) continue;
       v = String(n);
     }
     stmts.push(

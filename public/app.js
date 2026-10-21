@@ -75,6 +75,7 @@ function applySite(site) {
     '--site-accent-dark': site.accent_dark,
   };
   for (const [k, v] of Object.entries(map)) if (v) r.setProperty(k, v);
+  r.setProperty('--img-width', Math.min(100, Math.max(10, Number(site.image_width) || 30)) + '%');
   document.title = site.site_title || 'memo';
 
   const t = document.getElementById('siteTitle');
@@ -813,19 +814,64 @@ async function renderMe() {
       onclick: () => { titleColorValue = c.value; syncTitleEditor(); },
     });
   });
-  const customColorInput = el('input', {
-    type: 'color',
-    class: 'file-hidden',
-    value: safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR,
-    'aria-label': '自定义头衔颜色',
+  // 自定义颜色：点开就是 R/G/B 三个值，不再套一层系统取色器
+  const customPanel = el('div', {
+    class: 'title-custom-panel',
+    id: 'titleCustomPanel',
+    hidden: true,
+  });
+  const customChannels = {};
+  const asHex = (n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  const rgbOf = (hex) => {
+    const v = safeTitleColor(hex) || DEFAULT_TITLE_COLOR;
+    return [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
+  };
+  const applyChannel = (index, raw) => {
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isFinite(n)) return;
+    const rgb = rgbOf(titleColorValue);
+    rgb[index] = Math.max(0, Math.min(255, n));
+    titleColorValue = '#' + rgb.map(asHex).join('');
+    syncTitleEditor();
+  };
+  ['R', 'G', 'B'].forEach((name, index) => {
+    const range = el('input', {
+      type: 'range',
+      min: '0',
+      max: '255',
+      step: '1',
+      class: 'title-custom-range',
+      'aria-label': `${name} 通道`,
+    });
+    const num = el('input', {
+      type: 'number',
+      min: '0',
+      max: '255',
+      step: '1',
+      class: 'title-custom-num',
+      'aria-label': `${name} 通道数值`,
+    });
+    range.addEventListener('input', () => applyChannel(index, range.value));
+    num.addEventListener('input', () => applyChannel(index, num.value));
+    customChannels[name] = { range, num };
+    customPanel.append(el('label', { class: 'title-custom-row' },
+      el('span', { class: 'title-custom-key', text: name }),
+      range,
+      num,
+    ));
   });
   const customColorBtn = el('button', {
     type: 'button',
     class: 'title-random title-custom',
     title: '自定义颜色',
+    'aria-expanded': 'false',
+    'aria-controls': 'titleCustomPanel',
     onclick: () => {
-      customColorInput.value = safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR;
-      customColorInput.click();
+      const open = customPanel.hidden;
+      customPanel.hidden = !open;
+      customColorBtn.setAttribute('aria-expanded', String(open));
+      customColorBtn.classList.toggle('is-open', open);
+      syncCustomPanel();
     },
   }, icon('palette', 14), '自定义');
   const randomColorBtn = el('button', {
@@ -855,11 +901,22 @@ async function renderMe() {
       btn.classList.toggle('is-active', active);
       btn.setAttribute('aria-pressed', String(active));
     });
+    syncCustomPanel();
   };
-  customColorInput.addEventListener('input', () => {
-    titleColorValue = customColorInput.value;
-    syncTitleEditor();
-  });
+  const syncCustomPanel = () => {
+    const color = safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR;
+    const rgb = rgbOf(color);
+    customPanel.style.setProperty('--custom-color', color);
+    ['R', 'G', 'B'].forEach((name, index) => {
+      const { range, num } = customChannels[name];
+      const v = String(rgb[index]);
+      if (range.value !== v) range.value = v;
+      if (num.value !== v) num.value = v;
+    });
+  };
+  for (const { num } of Object.values(customChannels)) {
+    num.addEventListener('blur', syncCustomPanel);
+  }
   nameInput.addEventListener('input', () => {
     previewName.textContent = nameInput.value.trim() || me.display_name;
   });
@@ -944,10 +1001,10 @@ async function renderMe() {
         el('div', { class: 'title-color-actions' },
           customColorBtn,
           randomColorBtn,
-          customColorInput,
         ),
       ),
       el('div', { class: 'title-swatches', role: 'group', 'aria-label': '头衔颜色' }, swatches),
+      customPanel,
       titlePreview,
     ),
     el('div', { class: 'btn-row' },
@@ -1307,6 +1364,17 @@ async function renderAdminSite(pane) {
     style: 'width:110px',
   });
 
+  const imgWidthInput = el('input', {
+    class: 'input',
+    id: 'imgWidth',
+    type: 'number',
+    min: '10',
+    max: '100',
+    step: '1',
+    value: settings.image_width || '30',
+    style: 'width:110px',
+  });
+
   const syncImgInputs = () => {
     maxImgInput.disabled = !(imgReady && imgCb.checked);
   };
@@ -1349,6 +1417,11 @@ async function renderAdminSite(pane) {
       maxImgInput,
       el('p', { class: 'sub', style: 'margin:6px 0 0', text: '上传前浏览器会先压到最长边 1280px 的 WebP，并另存一张 720px 缩略图，通常 100–300KB；KV 模式同样只存压缩后的二进制。' }),
     ),
+    el('div', { class: 'field' },
+      el('label', { text: '信息流图片宽度（%）' }),
+      imgWidthInput,
+      el('p', { class: 'sub', style: 'margin:6px 0 0', text: '控制时间线和主页里图片容器的最大宽度，默认 30%；详情页仍显示大图。' }),
+    ),
   ));
 
   pane.append(el('div', { class: 'btn-row', style: 'margin-bottom:20px' },
@@ -1364,6 +1437,8 @@ async function renderAdminSite(pane) {
         if (imgReady) patch.image_storage = storageSel.value;
         const maxImg = document.getElementById('maxImg');
         if (maxImg && !maxImg.disabled) patch.max_image_mb = maxImg.value;
+        const imgWidth = document.getElementById('imgWidth');
+        if (imgWidth && !imgWidth.disabled) patch.image_width = imgWidth.value;
         try {
           await api.adminSaveSettings(patch);
           applySite(await api.site());

@@ -99,6 +99,7 @@ export async function getSite(ctx) {
     accent_dark: s.accent_dark,
     comments_enabled: s.comments_enabled === '1',
     max_image_mb: Number(s.max_image_mb) || 3,
+    image_width: Math.min(100, Math.max(10, Number.parseInt(s.image_width, 10) || 30)),
     needs_setup: n === 0,
     users: n,
     max_users: maxUsers(ctx),
