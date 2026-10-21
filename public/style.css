@@ -1317,6 +1317,55 @@ body {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .modal-err { min-height: 18px; margin: 6px 0 0; font-size: 12.5px; color: var(--danger); }
 
+/* 头衔自定义颜色：色调 / 饱和度 / 值 */
+.hsv-rows { display: grid; gap: 15px; margin: 18px 0; }
+.hsv-row { display: grid; gap: 7px; cursor: pointer; }
+.hsv-label { font-size: 13.5px; color: var(--fg); }
+.hsv-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  cursor: pointer;
+  outline: none;
+}
+.hsv-range::-webkit-slider-runnable-track { background: transparent; }
+.hsv-range::-moz-range-track { background: transparent; }
+.hsv-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 26px;
+  border: 2px solid #ffffff;
+  border-radius: 5px;
+  background: #3f9fd6;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.hsv-range::-moz-range-thumb {
+  width: 14px;
+  height: 24px;
+  border: 2px solid #ffffff;
+  border-radius: 5px;
+  background: #3f9fd6;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.hsv-range:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.hsv-selected { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hsv-selected-label { font-size: 13.5px; color: var(--fg); }
+.hsv-selected-side { display: flex; align-items: center; gap: 10px; }
+.hsv-hex { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.hsv-swatch {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
 .toast {
   position: fixed;
   left: 50%;
@@ -1398,6 +1447,9 @@ body {
     height: 50px;
   }
   .modal.modal-top { padding-top: max(14vh, 80px); }
+  .hsv-range { height: 36px; }
+  .hsv-range::-webkit-slider-thumb { width: 18px; height: 32px; }
+  .hsv-range::-moz-range-thumb { width: 16px; height: 30px; }
   .thumb { width: 56px; height: 56px; }
   .lb-prev { left: 8px; }
   .lb-next { right: 8px; }

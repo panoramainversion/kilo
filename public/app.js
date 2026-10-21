@@ -274,6 +274,111 @@ function randomMutedColor() {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
+/* 自定义头衔颜色：直接给出「色调 / 饱和度 / 值」三根滑杆。
+   手机 Edge 的系统取色器会先弹一层预设色，再点「自定义」才进到这里，
+   网页没法跳过那层，所以自己画一个一模一样的。 */
+function hexToHsv(hex) {
+  const value = safeTitleColor(hex) || DEFAULT_TITLE_COLOR;
+  const r = parseInt(value.slice(1, 3), 16) / 255;
+  const g = parseInt(value.slice(3, 5), 16) / 255;
+  const b = parseInt(value.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: max ? (d / max) * 100 : 0, v: max * 100 };
+}
+
+function hsvToHex(h, s, v) {
+  const sat = Math.max(0, Math.min(100, s)) / 100;
+  const val = Math.max(0, Math.min(100, v)) / 100;
+  const c = val * sat;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = val - c;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  const part = (n) => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+  return `#${part(r)}${part(g)}${part(b)}`;
+}
+
+function openTitleColorPicker(initial, onPick) {
+  const initialHex = safeTitleColor(initial) || DEFAULT_TITLE_COLOR;
+  const hsv = hexToHsv(initialHex);
+  let changed = false;
+
+  const swatch = el('span', { class: 'hsv-swatch', title: initialHex });
+  const hexLabel = el('span', { class: 'hsv-hex', text: initialHex });
+  const hue = el('input', {
+    type: 'range', min: '0', max: '360', step: '1',
+    class: 'hsv-range', value: String(Math.round(hsv.h)), 'aria-label': '色调',
+  });
+  const sat = el('input', {
+    type: 'range', min: '0', max: '100', step: '1',
+    class: 'hsv-range', value: String(Math.round(hsv.s)), 'aria-label': '饱和度',
+  });
+  const val = el('input', {
+    type: 'range', min: '0', max: '100', step: '1',
+    class: 'hsv-range', value: String(Math.round(hsv.v)), 'aria-label': '值',
+  });
+
+  const paint = () => {
+    const hex = hsvToHex(hsv.h, hsv.s, hsv.v);
+    swatch.style.background = hex;
+    swatch.title = hex;
+    hexLabel.textContent = hex;
+    hue.style.background = 'linear-gradient(to right, #ff0000 0%, #ffff00 16.66%, #00ff00 33.33%, #00ffff 50%, #0000ff 66.66%, #ff00ff 83.33%, #ff0000 100%)';
+    sat.style.background = `linear-gradient(to right, #ffffff, ${hsvToHex(hsv.h, 100, hsv.v)})`;
+    val.style.background = `linear-gradient(to right, #000000, ${hsvToHex(hsv.h, hsv.s, 100)})`;
+  };
+  hue.addEventListener('input', () => { hsv.h = Number(hue.value); changed = true; paint(); });
+  sat.addEventListener('input', () => { hsv.s = Number(sat.value); changed = true; paint(); });
+  val.addEventListener('input', () => { hsv.v = Number(val.value); changed = true; paint(); });
+  paint();
+
+  const row = (label, input) => el('label', { class: 'hsv-row' },
+    el('span', { class: 'hsv-label', text: label }),
+    input,
+  );
+
+  openModal(({ close }) => el('div', {},
+    el('h2', { class: 'modal-title', text: '选择颜色' }),
+    el('div', { class: 'hsv-rows' },
+      row('色调', hue),
+      row('饱和度', sat),
+      row('值', val),
+    ),
+    el('div', { class: 'hsv-selected' },
+      el('span', { class: 'hsv-selected-label', text: '已选择的颜色' }),
+      el('span', { class: 'hsv-selected-side' }, hexLabel, swatch),
+    ),
+    el('div', { class: 'modal-actions' },
+      el('button', { class: 'btn-ghost', text: '取消', onclick: close }),
+      el('button', {
+        class: 'btn-primary',
+        text: '设置',
+        onclick: () => {
+          onPick(changed ? hsvToHex(hsv.h, hsv.s, hsv.v) : initialHex);
+          close();
+        },
+      }),
+    ),
+  ));
+}
+
 function nameBadges(user) {
   if (!user) return [];
   const out = [];
@@ -814,19 +919,15 @@ async function renderMe() {
       onclick: () => { titleColorValue = c.value; syncTitleEditor(); },
     });
   });
-  const customColorInput = el('input', {
-    type: 'color',
-    class: 'file-hidden',
-    value: safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR,
-    'aria-label': '自定义头衔颜色',
-  });
   const customColorBtn = el('button', {
     type: 'button',
     class: 'title-random title-custom',
     title: '自定义颜色',
     onclick: () => {
-      customColorInput.value = safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR;
-      customColorInput.click();
+      openTitleColorPicker(titleColorValue, (hex) => {
+        titleColorValue = hex;
+        syncTitleEditor();
+      });
     },
   }, icon('palette', 14), '自定义');
   const randomColorBtn = el('button', {
@@ -857,10 +958,6 @@ async function renderMe() {
       btn.setAttribute('aria-pressed', String(active));
     });
   };
-  customColorInput.addEventListener('input', () => {
-    titleColorValue = customColorInput.value;
-    syncTitleEditor();
-  });
   nameInput.addEventListener('input', () => {
     previewName.textContent = nameInput.value.trim() || me.display_name;
   });
@@ -945,7 +1042,6 @@ async function renderMe() {
         el('div', { class: 'title-color-actions' },
           customColorBtn,
           randomColorBtn,
-          customColorInput,
         ),
       ),
       el('div', { class: 'title-swatches', role: 'group', 'aria-label': '头衔颜色' }, swatches),
