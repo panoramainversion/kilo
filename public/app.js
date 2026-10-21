@@ -30,11 +30,6 @@ function isTouchUi() {
   return window.matchMedia('(hover: none)').matches;
 }
 
-function themeAccentHex() {
-  const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  return /^#[0-9a-f]{6}$/i.test(v) ? v : '#b84200';
-}
-
 /* ── 主题 ─────────────────────────────────────────────────── */
 
 const THEMES = ['auto', 'light', 'dark'];
@@ -127,7 +122,7 @@ function imageGrid(images, full = false) {
   const list = images.slice(0, 9);
   const n = list.length;
   const cls = n === 1 ? 'n1' : n === 2 ? 'n2' : n === 3 ? 'n3' : n === 4 ? 'n4' : 'n5';
-  const box = el('div', { class: 'imgs ' + cls });
+  const box = el('div', { class: 'imgs ' + cls + (full ? ' full' : '') });
   list.forEach((im, i) => {
     // 时间线/主页只拉缩略图；详情页和灯箱才用原图
     const img = el('img', {
@@ -232,8 +227,23 @@ function replyDialog(note, onAdded) {
 
 /* ── 条目卡片 ─────────────────────────────────────────────── */
 
+const DEFAULT_TITLE_COLOR = '#8a6f5a';
+
 function safeTitleColor(color) {
   return /^#[0-9a-f]{6}$/i.test(String(color || '')) ? color : '';
+}
+
+function randomMutedColor() {
+  const hue = Math.floor(Math.random() * 360);
+  const sat = 22 + Math.floor(Math.random() * 13);
+  const light = 40 + Math.floor(Math.random() * 17);
+  const a = sat * Math.min(light, 100 - light) / 100;
+  const f = (n) => {
+    const k = (n + hue / 30) % 12;
+    const v = light - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(255 * v / 100).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
 }
 
 function nameBadges(user) {
@@ -241,11 +251,11 @@ function nameBadges(user) {
   const out = [];
   if (user.role === 'admin') out.push(verifyBadge('管理员', 15));
   if (user.title_on && user.title) {
-    const color = safeTitleColor(user.title_color);
+    const color = safeTitleColor(user.title_color) || DEFAULT_TITLE_COLOR;
     out.push(el('span', {
       class: 'user-title',
       text: user.title,
-      style: color ? `--tag-color:${color}` : null,
+      style: `--tag-color:${color}`,
     }));
   }
   return out;
@@ -740,20 +750,35 @@ async function renderMe() {
   const bioInput = el('textarea', { class: 'textarea', maxlength: '200' });
   bioInput.value = me.bio || '';
 
+  const TITLE_COLORS = [
+    { name: '茶褐', value: '#8a6f5a' },
+    { name: '陶土', value: '#986f5f' },
+    { name: '赭红', value: '#8d5f54' },
+    { name: '麦金', value: '#97835f' },
+    { name: '苔绿', value: '#72806b' },
+    { name: '松灰', value: '#66756b' },
+    { name: '雾蓝', value: '#687b8a' },
+    { name: '黛青', value: '#5f737a' },
+    { name: '藕紫', value: '#806f7f' },
+    { name: '灰紫', value: '#756879' },
+    { name: '岩灰', value: '#72706b' },
+    { name: '墨褐', value: '#6b5e55' },
+  ];
+  let titleColorValue = safeTitleColor(me.title_color) || DEFAULT_TITLE_COLOR;
+
   const titleInput = el('input', {
     class: 'input',
     maxlength: '12',
     placeholder: '比如：夜行观察员',
     value: me.title || '',
   });
-  const titleColor = el('input', {
-    type: 'color',
-    class: 'color-input',
-    value: /^#[0-9a-f]{6}$/i.test(me.title_color || '') ? me.title_color : themeAccentHex(),
-    'aria-label': '头衔颜色',
-  });
-  const titleOn = el('input', { type: 'checkbox' });
+  const titleOn = el('input', { type: 'checkbox', class: 'title-switch-input' });
   titleOn.checked = !!me.title_on;
+  const titleSwitch = el('label', { class: 'title-switch' },
+    titleOn,
+    el('span', { class: 'title-switch-track', 'aria-hidden': 'true' }),
+    el('span', { class: 'title-switch-text', text: '在名字旁显示' }),
+  );
   const previewName = el('span', { text: me.display_name });
   const previewTitle = el('span', { class: 'user-title', text: me.title || '头衔' });
   const titlePreview = el('div', { class: 'title-preview' },
@@ -762,18 +787,42 @@ async function renderMe() {
     me.role === 'admin' ? verifyBadge('管理员', 15) : null,
     previewTitle,
   );
+  const swatches = TITLE_COLORS.map((c) => el('button', {
+    type: 'button',
+    class: 'title-swatch',
+    title: c.name,
+    'aria-label': c.name,
+    'aria-pressed': 'false',
+    style: `--swatch:${c.value}`,
+    onclick: () => { titleColorValue = c.value; syncTitleEditor(); },
+  }));
+  const randomColorBtn = el('button', {
+    type: 'button',
+    class: 'title-random',
+    title: '换一个柔和的颜色',
+    onclick: () => { titleColorValue = randomMutedColor(); syncTitleEditor(); },
+  }, icon('shuffle', 14), '随机');
   const syncTitleEditor = () => {
-    const color = /^#[0-9a-f]{6}$/i.test(titleColor.value) ? titleColor.value : '';
-    if (color) previewTitle.style.setProperty('--tag-color', color);
-    else previewTitle.style.removeProperty('--tag-color');
+    const color = safeTitleColor(titleColorValue);
+    if (color) {
+      previewTitle.style.setProperty('--tag-color', color);
+      titleSwitch.style.setProperty('--tag-color', color);
+    } else {
+      previewTitle.style.removeProperty('--tag-color');
+      titleSwitch.style.removeProperty('--tag-color');
+    }
     previewTitle.textContent = titleInput.value.trim() || '头衔';
     previewTitle.classList.toggle('is-off', !titleOn.checked || !titleInput.value.trim());
+    swatches.forEach((btn, i) => {
+      const active = TITLE_COLORS[i].value.toLowerCase() === color.toLowerCase();
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
   };
   nameInput.addEventListener('input', () => {
     previewName.textContent = nameInput.value.trim() || me.display_name;
   });
   titleInput.addEventListener('input', syncTitleEditor);
-  titleColor.addEventListener('input', syncTitleEditor);
   titleOn.addEventListener('change', syncTitleEditor);
   syncTitleEditor();
 
@@ -797,7 +846,7 @@ async function renderMe() {
   };
   paintAvatar();
 
-  const fileInput = el('input', { type: 'file', accept: 'image/*', hidden: true });
+  const fileInput = el('input', { type: 'file', accept: 'image/*', class: 'file-hidden' });
   async function pickAvatar() {
     fileInput.value = '';
     fileInput.click();
@@ -824,7 +873,7 @@ async function renderMe() {
         display_name: nameInput.value.trim(),
         bio: bioInput.value.trim(),
         title: titleInput.value.trim(),
-        title_color: titleColor.value,
+        title_color: titleColorValue,
         title_on: titleOn.checked,
         avatar_data: avatarData,
       });
@@ -843,14 +892,17 @@ async function renderMe() {
     avatarBox,
     el('div', { class: 'field' }, el('label', { text: '显示名' }), nameInput),
     el('div', { class: 'field' }, el('label', { text: '简介' }), bioInput),
-    el('div', { class: 'field' },
-      el('label', { text: '头衔' }),
-      el('label', { class: 'switch' },
-        titleOn,
-        el('span', { class: 'switch-track', 'aria-hidden': 'true' }),
-        el('span', { text: '在名字旁显示' }),
+    el('div', { class: 'field title-field' },
+      el('div', { class: 'title-field-head' },
+        el('label', { class: 'title-label', text: '头衔' }),
+        titleSwitch,
       ),
-      el('div', { class: 'title-edit' }, titleInput, titleColor),
+      titleInput,
+      el('div', { class: 'title-color-head' },
+        el('span', { class: 'title-color-label', text: '颜色' }),
+        randomColorBtn,
+      ),
+      el('div', { class: 'title-swatches', role: 'group', 'aria-label': '头衔颜色' }, swatches),
       titlePreview,
     ),
     el('div', { class: 'btn-row' },
@@ -1370,6 +1422,10 @@ async function renderAdminData(pane) {
 /* ── 发布条 ───────────────────────────────────────────────── */
 
 const MAX_IMG = 9;
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|avif|heic|heif|bmp|tiff?)$/i;
+function isImageFile(file) {
+  return !!file && (((file.type || '').toLowerCase().startsWith('image/')) || IMAGE_EXT.test(file.name || ''));
+}
 // 原图也压小一点：时间线看缩略图，点进单条再取这张原图
 const MAX_SIDE = 1280;
 const THUMB_SIDE = 720;
@@ -1423,7 +1479,7 @@ async function compressImage(file) {
 
 /** 头像压成 192×192 的方形 data URL，直接存数据库，不依赖 R2 */
 async function avatarDataUrl(file) {
-  if (!file.type.startsWith('image/')) throw new Error('只能选图片');
+  if (!isImageFile(file)) throw new Error('只能选图片');
   const size = 192;
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -1456,7 +1512,7 @@ async function avatarDataUrl(file) {
 }
 
 async function uploadFile(file) {
-  if (!file.type.startsWith('image/')) throw new Error('只能传图片');
+  if (!isImageFile(file)) throw new Error('只能传图片');
   const { blob, w, h, thumbBlob, tw, th } = await compressImage(file);
   const res = await api.upload(blob, w, h);
   if (thumbBlob) {
@@ -1529,7 +1585,7 @@ function setComposerOpen(open) {
     fab.setAttribute('aria-expanded', 'false');
     panel.classList.remove('dragover');
     composerKb?.reset();
-    if (!isTouchUi()) fab.focus({ preventScroll: true });
+    if (!isTouchUi() && !dock.hidden) fab.focus({ preventScroll: true });
   }
 }
 
@@ -1580,8 +1636,10 @@ async function addFiles(files) {
     toast(state.site?.images_ready ? '图片功能已关闭，管理员可以在后台打开' : '图片存储未配置：检查 B2 / KV / R2');
     return;
   }
-  const list = Array.from(files).filter((f) => f.type.startsWith('image/'));
-  if (!list.length) return;
+  const all = Array.from(files || []);
+  if (!all.length) return;
+  const list = all.filter(isImageFile);
+  if (!list.length) { toast('只能选图片'); return; }
   if (state.pending.length + list.length > MAX_IMG) {
     toast(`最多 ${MAX_IMG} 张`);
     return;
@@ -1693,7 +1751,7 @@ function initDock() {
     if (e.key === 'Escape' && !panel.hidden) setComposerOpen(false);
   });
 
-  // 页面一滚动就先收起按钮，停手 0.5 秒再露出来
+  // 页面一滚动就先收起按钮，停手 1.4 秒再慢慢露出来
   let fabTimer = 0;
   const showFab = () => document.getElementById('composeBtn').classList.remove('tucked');
   const hideFab = () => {
@@ -1702,7 +1760,7 @@ function initDock() {
   window.addEventListener('scroll', () => {
     window.clearTimeout(fabTimer);
     hideFab();
-    fabTimer = window.setTimeout(showFab, 500);
+    fabTimer = window.setTimeout(showFab, 1400);
   }, { passive: true });
   window.addEventListener('resize', showFab);
 }
@@ -1723,6 +1781,8 @@ export async function route() {
   const { seg, q } = parseHash();
   const v = view();
   window.scrollTo(0, 0);
+  const panel = document.getElementById('composerPanel');
+  if (panel && !panel.hidden) setComposerOpen(false);
 
   const head = seg[0] || '';
   try {
@@ -1769,6 +1829,7 @@ export async function route() {
       el('p', { class: 'state-sub', text: e.message }),
     ));
   }
+  renderDock();
   updateFootCount();
 }
 
