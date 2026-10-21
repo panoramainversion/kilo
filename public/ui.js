@@ -41,6 +41,7 @@ const PATHS = {
   image: '<rect x="3.6" y="5" width="16.8" height="14" rx="2.4"/><circle cx="9" cy="10.2" r="1.5"/><path d="m4.4 17.4 4.6-4.2 3.4 3 3-2.6 4.2 3.8"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   chevron: '<path d="m9 5 7 7-7 7"/>',
+  arrow: '<path d="M5 12h13"/><path d="m12.5 5.8 6.2 6.2-6.2 6.2"/>',
   logout: '<path d="M15 4.6H6.6a2 2 0 0 0-2 2v10.8a2 2 0 0 0 2 2H15"/><path d="M18.4 12H9.6"/><path d="m15.4 8.6 3.4 3.4-3.4 3.4"/>',
   settings: '<circle cx="12" cy="12" r="3.1"/><path d="M19.4 14.2a1.5 1.5 0 0 0 .3 1.7l.1.1a1.8 1.8 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-2.6 1v.3a1.8 1.8 0 1 1-3.6 0v-.2a1.5 1.5 0 0 0-2.6-1l-.1.1a1.8 1.8 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0-1-2.6H4.4a1.8 1.8 0 1 1 0-3.6h.2a1.5 1.5 0 0 0 1-2.6l-.1-.1a1.8 1.8 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 2.6-1V4.4a1.8 1.8 0 1 1 3.6 0v.2a1.5 1.5 0 0 0 2.6 1l.1-.1a1.8 1.8 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0 1 2.6h.3a1.8 1.8 0 1 1 0 3.6h-.2"/>',
   plus: '<path d="M12 5.4v13.2M5.4 12h13.2"/>',
@@ -58,6 +59,26 @@ export function icon(name, size = 16) {
   svg.setAttribute('stroke-linejoin', 'round');
   svg.innerHTML = PATHS[name] || '';
   return svg;
+}
+
+/** 管理员认证标：蓝色圆底 + 白勾，只露图标，文字留给 title / aria */
+export function verifyBadge(label = '管理员', size = 15) {
+  const wrap = el('span', {
+    class: 'verify-badge',
+    title: label,
+    role: 'img',
+    'aria-label': label,
+  });
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', size);
+  svg.setAttribute('height', size);
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = '<circle cx="12" cy="12" r="9.2" fill="#1d9bf0"/>'
+    + '<path d="m7.5 12.3 2.8 2.8 6.3-6.5" fill="none" stroke="#fff" stroke-width="2.1" '
+    + 'stroke-linecap="round" stroke-linejoin="round"/>';
+  wrap.append(svg);
+  return wrap;
 }
 
 /* ── 正文渲染（Markdown 子集，全部走 DOM，不拼 HTML）───────── */

@@ -62,6 +62,14 @@ export const api = {
     raw: blob,
     headers: { 'content-type': blob.type || 'application/octet-stream' },
   }),
+  uploadThumb: (blob, w, h, base) => request(
+    `/api/upload?thumb_of=${encodeURIComponent(base)}&w=${w || 0}&h=${h || 0}`,
+    {
+      method: 'POST',
+      raw: blob,
+      headers: { 'content-type': blob.type || 'application/octet-stream' },
+    },
+  ),
 
   adminUsers: () => request('/api/admin/users'),
   adminCreateUser: (body) => request('/api/admin/users', { method: 'POST', body }),

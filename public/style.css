@@ -176,9 +176,10 @@ body {
 .me-slot img { width: 100%; height: 100%; object-fit: cover; }
 
 .search-bar { margin-top: 18px; animation: fade 0.2s var(--ease); }
+.search-field { position: relative; }
 .search-input {
   width: 100%;
-  padding: 10px 14px;
+  padding: 10px 50px 10px 14px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
   background: var(--surface);
@@ -188,6 +189,26 @@ body {
   outline: none;
 }
 .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search-go {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.18s, background-color 0.18s, opacity 0.18s;
+}
+.search-go:hover { color: var(--fg); background: var(--accent-soft); }
+.search-go:active { transform: translateY(-50%) scale(0.94); }
+.search-go:disabled { opacity: 0.3; cursor: default; background: transparent; color: var(--muted); }
 
 /* ── 页面容器 ──────────────────────────────────────────── */
 
@@ -312,17 +333,35 @@ body {
 .who-meta a { color: inherit; text-decoration: none; }
 .who-meta a:hover { color: var(--accent); }
 
-.role-tag {
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  padding: 0 4px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  color: var(--accent);
-  opacity: 0.85;
+.verify-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
   margin-left: 5px;
   vertical-align: 1px;
+  line-height: 0;
 }
+.verify-badge svg { display: block; }
+
+.user-title {
+  display: inline-flex;
+  align-items: center;
+  max-width: 12em;
+  margin-left: 5px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--tag-color, var(--accent)) 52%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--tag-color, var(--accent)) 12%, transparent);
+  color: color-mix(in srgb, var(--tag-color, var(--accent)) 82%, var(--fg));
+  font-size: 10.5px;
+  line-height: 1.55;
+  letter-spacing: 0.03em;
+  vertical-align: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-title.is-off { opacity: 0.38; }
 
 .note-tools {
   margin-left: auto;
@@ -490,6 +529,8 @@ body {
   color: var(--muted);
 }
 .comment-head b { font-size: 13.5px; font-weight: 600; color: var(--fg); }
+.comment-head .verify-badge,
+.comment-head .user-title { margin-left: -3px; }
 .comment-body { color: var(--fg-soft); overflow-wrap: anywhere; }
 .comment-del {
   border: 0;
@@ -753,6 +794,66 @@ body {
   font-size: 13px;
   color: var(--muted);
 }
+.field .switch {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--fg-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.switch input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 21px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background-color 0.2s var(--ease);
+}
+.switch-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.22s var(--ease);
+}
+.switch input:checked + .switch-track { background: var(--accent); }
+.switch input:checked + .switch-track::after { transform: translateX(15px); }
+.switch input:focus-visible + .switch-track { box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.title-edit { display: flex; align-items: stretch; gap: 8px; }
+.title-edit .input { flex: 1; min-width: 0; }
+.color-input {
+  flex: none;
+  width: 48px;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.color-input::-webkit-color-swatch-wrapper { padding: 0; }
+.color-input::-webkit-color-swatch { border: 0; border-radius: 6px; }
+.color-input::-moz-color-swatch { border: 0; border-radius: 6px; }
+.title-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 9px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.title-preview .user-title { margin-left: 1px; }
 .input, .textarea {
   width: 100%;
   padding: 9px 12px;
@@ -943,6 +1044,9 @@ body {
   font-weight: 500;
 }
 .profile .handle { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+.profile h1 .verify-badge,
+.profile h1 .user-title { vertical-align: 3px; }
+.profile h1 .user-title { font-size: 11px; }
 .profile .bio { margin: 8px 0 0; font-size: 14.5px; color: var(--fg-soft); white-space: pre-wrap; }
 .profile .nums { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
 

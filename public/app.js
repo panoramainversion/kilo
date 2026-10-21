@@ -6,7 +6,9 @@ import { api, ApiError } from './api.js';
 import {
   el, clear, icon, renderBody, relTime, fullTime, toast, openModal, closeModal,
   confirmModal, openLightbox, initLightbox, avatarEl, bytes, copyText, initSoftKeyboard,
+  verifyBadge,
 } from './ui.js';
+import { nextVerse } from './verses.js';
 
 const state = {
   site: null,
@@ -17,7 +19,7 @@ const state = {
   loading: false,
   done: false,
   filter: { tag: '', q: '', user: '' },
-  pending: [],          // 待发布的图片 [{key,w,h,thumb,busy}]
+  pending: [],          // 待发布的图片 [{key,w,h,t,thumb,busy}]
   flashId: 0,
   uploading: 0,
 };
@@ -26,6 +28,11 @@ const view = () => document.getElementById('view');
 
 function isTouchUi() {
   return window.matchMedia('(hover: none)').matches;
+}
+
+function themeAccentHex() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  return /^#[0-9a-f]{6}$/i.test(v) ? v : '#b84200';
 }
 
 /* ── 主题 ─────────────────────────────────────────────────── */
@@ -116,13 +123,19 @@ function renderHeader() {
 
 /* ── 图片网格 ─────────────────────────────────────────────── */
 
-function imageGrid(images) {
+function imageGrid(images, full = false) {
   const list = images.slice(0, 9);
   const n = list.length;
   const cls = n === 1 ? 'n1' : n === 2 ? 'n2' : n === 3 ? 'n3' : n === 4 ? 'n4' : 'n5';
   const box = el('div', { class: 'imgs ' + cls });
   list.forEach((im, i) => {
-    const img = el('img', { src: im.url, alt: '', loading: 'lazy', decoding: 'async' });
+    // 时间线/主页只拉缩略图；详情页和灯箱才用原图
+    const img = el('img', {
+      src: full ? im.url : (im.thumb || im.url),
+      alt: '',
+      loading: 'lazy',
+      decoding: 'async',
+    });
     if (im.w && im.h) { img.setAttribute('width', im.w); img.setAttribute('height', im.h); }
     box.append(el('button', {
       type: 'button',
@@ -145,6 +158,7 @@ function commentNode(c, onDeleted) {
     el('div', { class: 'comment-main' },
       el('div', { class: 'comment-head' },
         el('b', { text: c.user.display_name }),
+        ...nameBadges(c.user),
         el('span', { text: relTime(c.created_at) }),
         onDeleted && canDeleteComment(c) ? el('button', {
           class: 'comment-del',
@@ -217,6 +231,25 @@ function replyDialog(note, onAdded) {
 }
 
 /* ── 条目卡片 ─────────────────────────────────────────────── */
+
+function safeTitleColor(color) {
+  return /^#[0-9a-f]{6}$/i.test(String(color || '')) ? color : '';
+}
+
+function nameBadges(user) {
+  if (!user) return [];
+  const out = [];
+  if (user.role === 'admin') out.push(verifyBadge('管理员', 15));
+  if (user.title_on && user.title) {
+    const color = safeTitleColor(user.title_color);
+    out.push(el('span', {
+      class: 'user-title',
+      text: user.title,
+      style: color ? `--tag-color:${color}` : null,
+    }));
+  }
+  return out;
+}
 
 function noteCard(note, i, full = false) {
   const canEdit = state.me && (state.me.id === note.user.id || state.me.role === 'admin');
@@ -307,7 +340,7 @@ function noteCard(note, i, full = false) {
       el('div', { class: 'who' },
         el('a', { class: 'who-name', href: `#/u/${note.user.username}` },
           note.user.display_name,
-          note.user.role === 'admin' ? el('span', { class: 'role-tag', text: '管理员' }) : null,
+          ...nameBadges(note.user),
         ),
         el('div', { class: 'who-meta' },
           el('a', { href: `#/n/${note.id}`, title: fullTime(note.created_at) }, relTime(note.created_at)),
@@ -318,7 +351,7 @@ function noteCard(note, i, full = false) {
       tools,
     ),
     note.content ? el('div', { class: 'note-body' }, renderBody(note.content)) : null,
-    note.images && note.images.length ? imageGrid(note.images) : null,
+    note.images && note.images.length ? imageGrid(note.images, full) : null,
     el('div', { class: 'note-foot' },
       countBtn,
       el('button', {
@@ -531,8 +564,8 @@ async function renderProfile(name) {
     v.append(el('div', { class: 'profile' },
       avatarEl(user, 'lg'),
       el('div', { class: 'info' },
-        el('h1', { text: user.display_name }),
-        el('div', { class: 'handle', text: '@' + user.username + (user.role === 'admin' ? ' · 管理员' : '') }),
+        el('h1', {}, user.display_name, ...nameBadges(user)),
+        el('div', { class: 'handle', text: '@' + user.username }),
         user.bio ? el('p', { class: 'bio', text: user.bio }) : null,
         el('div', { class: 'nums', text: `${user.note_count} 条` }),
         state.me && state.me.id === user.id
@@ -572,7 +605,7 @@ async function renderPeople() {
         el('div', { class: 'grow' },
           el('a', { class: 'name', href: `#/u/${u.username}`, style: 'text-decoration:none;color:inherit' },
             u.display_name,
-            u.role === 'admin' ? el('span', { class: 'role-tag', text: '管理员' }) : null),
+            ...nameBadges(u)),
           el('div', { class: 'meta', text: `@${u.username} · ${u.note_count} 条` }),
         ),
         el('a', { class: 'btn-ghost', href: `#/u/${u.username}`, text: '看看' }),
@@ -707,6 +740,43 @@ async function renderMe() {
   const bioInput = el('textarea', { class: 'textarea', maxlength: '200' });
   bioInput.value = me.bio || '';
 
+  const titleInput = el('input', {
+    class: 'input',
+    maxlength: '12',
+    placeholder: '比如：夜行观察员',
+    value: me.title || '',
+  });
+  const titleColor = el('input', {
+    type: 'color',
+    class: 'color-input',
+    value: /^#[0-9a-f]{6}$/i.test(me.title_color || '') ? me.title_color : themeAccentHex(),
+    'aria-label': '头衔颜色',
+  });
+  const titleOn = el('input', { type: 'checkbox' });
+  titleOn.checked = !!me.title_on;
+  const previewName = el('span', { text: me.display_name });
+  const previewTitle = el('span', { class: 'user-title', text: me.title || '头衔' });
+  const titlePreview = el('div', { class: 'title-preview' },
+    el('span', { text: '预览' }),
+    previewName,
+    me.role === 'admin' ? verifyBadge('管理员', 15) : null,
+    previewTitle,
+  );
+  const syncTitleEditor = () => {
+    const color = /^#[0-9a-f]{6}$/i.test(titleColor.value) ? titleColor.value : '';
+    if (color) previewTitle.style.setProperty('--tag-color', color);
+    else previewTitle.style.removeProperty('--tag-color');
+    previewTitle.textContent = titleInput.value.trim() || '头衔';
+    previewTitle.classList.toggle('is-off', !titleOn.checked || !titleInput.value.trim());
+  };
+  nameInput.addEventListener('input', () => {
+    previewName.textContent = nameInput.value.trim() || me.display_name;
+  });
+  titleInput.addEventListener('input', syncTitleEditor);
+  titleColor.addEventListener('input', syncTitleEditor);
+  titleOn.addEventListener('change', syncTitleEditor);
+  syncTitleEditor();
+
   let avatarData = me.avatar && me.avatar.startsWith('data:') ? me.avatar : null;
   const avatarBox = el('div', { style: 'display:flex;align-items:center;gap:14px;margin-bottom:16px' });
   const paintAvatar = () => {
@@ -743,11 +813,19 @@ async function renderMe() {
   });
 
   const save = async (btn) => {
+    if (titleOn.checked && !titleInput.value.trim()) {
+      toast('先写一个头衔');
+      titleInput.focus();
+      return;
+    }
     btn.disabled = true;
     try {
       const { user } = await api.updateProfile({
         display_name: nameInput.value.trim(),
         bio: bioInput.value.trim(),
+        title: titleInput.value.trim(),
+        title_color: titleColor.value,
+        title_on: titleOn.checked,
         avatar_data: avatarData,
       });
       state.me = user;
@@ -765,6 +843,16 @@ async function renderMe() {
     avatarBox,
     el('div', { class: 'field' }, el('label', { text: '显示名' }), nameInput),
     el('div', { class: 'field' }, el('label', { text: '简介' }), bioInput),
+    el('div', { class: 'field' },
+      el('label', { text: '头衔' }),
+      el('label', { class: 'switch' },
+        titleOn,
+        el('span', { class: 'switch-track', 'aria-hidden': 'true' }),
+        el('span', { text: '在名字旁显示' }),
+      ),
+      el('div', { class: 'title-edit' }, titleInput, titleColor),
+      titlePreview,
+    ),
     el('div', { class: 'btn-row' },
       el('button', { class: 'btn-primary', text: '保存', onclick: (e) => save(e.target) }),
       el('a', { class: 'btn-ghost', href: `#/u/${me.username}`, text: '看我的主页' }),
@@ -921,7 +1009,7 @@ async function renderAdminUsers(pane) {
       el('div', { class: 'grow' },
         el('div', { class: 'name' },
           u.display_name,
-          u.role === 'admin' ? el('span', { class: 'role-tag', text: '管理员' }) : null,
+          ...nameBadges(u),
           el('span', { class: 'badge' + (u.active ? '' : ' off'), style: 'margin-left:8px', text: u.active ? '正常' : '待激活' }),
         ),
         el('div', { class: 'meta', text: `@${u.username} · ${u.note_count} 条 · ${u.last_login_at ? '上次登录 ' + relTime(u.last_login_at) : '从未登录'}` }),
@@ -1162,7 +1250,7 @@ async function renderAdminSite(pane) {
     el('div', { class: 'field' },
       el('label', { text: '单张上限（MB）' }),
       maxImgInput,
-      el('p', { class: 'sub', style: 'margin:6px 0 0', text: '上传前浏览器会先压到最长边 1600px 的 WebP，通常 100–300KB；KV 模式同样只存压缩后的二进制。' }),
+      el('p', { class: 'sub', style: 'margin:6px 0 0', text: '上传前浏览器会先压到最长边 1280px 的 WebP，并另存一张 720px 缩略图，通常 100–300KB；KV 模式同样只存压缩后的二进制。' }),
     ),
   ));
 
@@ -1282,26 +1370,55 @@ async function renderAdminData(pane) {
 /* ── 发布条 ───────────────────────────────────────────────── */
 
 const MAX_IMG = 9;
-const MAX_SIDE = 1600;
+// 原图也压小一点：时间线看缩略图，点进单条再取这张原图
+const MAX_SIDE = 1280;
+const THUMB_SIDE = 720;
+const IMG_QUALITY = 0.78;
+const THUMB_QUALITY = 0.72;
+
+function canvasBlob(canvas, quality) {
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+}
 
 async function compressImage(file) {
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
   if (!bitmap) return { blob: file, w: 0, h: 0 };
+
   const { width, height } = bitmap;
   const scale = Math.min(1, MAX_SIDE / Math.max(width, height));
   const w = Math.max(1, Math.round(width * scale));
   const h = Math.max(1, Math.round(height * scale));
+
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(bitmap, 0, 0, w, h);
+
+  // 缩略图从同一张位图生成，避免二次解码
+  const tScale = Math.min(1, THUMB_SIDE / Math.max(width, height));
+  const tw = Math.max(1, Math.round(width * tScale));
+  const th = Math.max(1, Math.round(height * tScale));
+  const tCanvas = document.createElement('canvas');
+  tCanvas.width = tw;
+  tCanvas.height = th;
+  tCanvas.getContext('2d').drawImage(bitmap, 0, 0, tw, th);
   if (bitmap.close) bitmap.close();
-  const blob = await new Promise((r) => canvas.toBlob(r, 'image/webp', 0.82));
+
+  const blob = await canvasBlob(canvas, IMG_QUALITY);
   if (!blob) return { blob: file, w, h };
   // 有些浏览器不支持 webp，会回退成 png，体积可能更大
   if (blob.type !== 'image/webp' && blob.size > file.size) return { blob: file, w, h };
-  return { blob, w, h };
+
+  const thumbBlob = await canvasBlob(tCanvas, THUMB_QUALITY);
+  return {
+    blob,
+    w,
+    h,
+    thumbBlob: thumbBlob && thumbBlob.type === 'image/webp' ? thumbBlob : null,
+    tw,
+    th,
+  };
 }
 
 /** 头像压成 192×192 的方形 data URL，直接存数据库，不依赖 R2 */
@@ -1340,33 +1457,26 @@ async function avatarDataUrl(file) {
 
 async function uploadFile(file) {
   if (!file.type.startsWith('image/')) throw new Error('只能传图片');
-  const { blob, w, h } = await compressImage(file);
+  const { blob, w, h, thumbBlob, tw, th } = await compressImage(file);
   const res = await api.upload(blob, w, h);
+  if (thumbBlob) {
+    try {
+      const up = await api.uploadThumb(thumbBlob, tw, th, res.key);
+      res.t = up.key;
+    } catch (e) {
+      // 缩略图只是省流量，失败不影响原图发布
+      console.warn('缩略图上传失败', e);
+    }
+  }
   return res;
 }
 
-const COMPOSER_VERSES = [
-  '行到水穷处，坐看云起时',
-  '人间有味是清欢',
-  '此心安处是吾乡',
-  '落花无言，人淡如菊',
-  '晚来天欲雪，能饮一杯无',
-  '满船清梦压星河',
-  '一蓑烟雨任平生',
-  '云深不知处',
-  '山气日夕佳，飞鸟相与还',
-  '当时明月在，曾照彩云归',
-];
-let lastVerse = -1;
 let composerKb = null;
 
 function setComposerVerse() {
   const node = document.getElementById('composerTitle');
   if (!node) return;
-  let i = Math.floor(Math.random() * COMPOSER_VERSES.length);
-  if (i === lastVerse) i = (i + 1) % COMPOSER_VERSES.length;
-  lastVerse = i;
-  node.textContent = COMPOSER_VERSES[i];
+  node.textContent = nextVerse();
 }
 
 function renderDock() {
@@ -1486,6 +1596,7 @@ async function addFiles(files) {
       item.key = up.key;
       item.w = up.w;
       item.h = up.h;
+      item.t = up.t || '';
       item.busy = false;
     } catch (e) {
       toast(e.message);
@@ -1501,7 +1612,7 @@ async function publish() {
   const ta = document.getElementById('composer');
   const btn = document.getElementById('publishBtn');
   const content = ta.value.trim();
-  const images = state.pending.filter((p) => p.key).map((p) => ({ k: p.key, w: p.w, h: p.h }));
+  const images = state.pending.filter((p) => p.key).map((p) => ({ k: p.key, w: p.w, h: p.h, t: p.t || '' }));
   if (!content && !images.length) return;
   if (state.pending.some((p) => p.busy)) { toast('图片还在传，稍等一下'); return; }
 
@@ -1582,32 +1693,18 @@ function initDock() {
     if (e.key === 'Escape' && !panel.hidden) setComposerOpen(false);
   });
 
-  // 窄屏上按钮会压到正文，往下读时先收起来，往回翻再出现
-  let lastY = window.scrollY;
-  let ticking = false;
-  const syncFab = () => {
-    const fab = document.getElementById('composeBtn');
-    const y = window.scrollY;
-    const dy = y - lastY;
-    const nearBottom = y >= document.documentElement.scrollHeight - window.innerHeight - 160;
-    if (!panel.hidden || window.innerWidth >= 900) {
-      fab.classList.remove('tucked');
-    } else if (y > 200 && dy > 8 && !nearBottom) {
-      fab.classList.add('tucked');
-    } else if (dy < -8 || y < 120 || nearBottom) {
-      fab.classList.remove('tucked');
-    }
-    lastY = y;
+  // 页面一滚动就先收起按钮，停手 0.5 秒再露出来
+  let fabTimer = 0;
+  const showFab = () => document.getElementById('composeBtn').classList.remove('tucked');
+  const hideFab = () => {
+    if (panel.hidden) document.getElementById('composeBtn').classList.add('tucked');
   };
   window.addEventListener('scroll', () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(() => { ticking = false; syncFab(); });
+    window.clearTimeout(fabTimer);
+    hideFab();
+    fabTimer = window.setTimeout(showFab, 500);
   }, { passive: true });
-  window.addEventListener('resize', () => {
-    if (window.innerWidth >= 900) document.getElementById('composeBtn').classList.remove('tucked');
-    lastY = window.scrollY;
-  });
+  window.addEventListener('resize', showFab);
 }
 
 /* ── 路由 ─────────────────────────────────────────────────── */
@@ -1688,23 +1785,45 @@ async function boot(refreshMe = false) {
 }
 
 function initHeader() {
+  const searchBar = document.getElementById('searchBar');
+  const searchInput = document.getElementById('searchInput');
+  const searchGo = document.getElementById('searchGo');
+  const syncSearchGo = () => { searchGo.disabled = !searchInput.value.trim(); };
+  const submitSearch = () => {
+    const q = searchInput.value.trim();
+    if (!q) { searchInput.focus(); return; }
+    searchBar.hidden = true;
+    searchInput.blur();
+    const next = `#/search?q=${encodeURIComponent(q)}`;
+    if (location.hash === next) route();
+    else location.hash = next;
+  };
+
   document.getElementById('searchBtn').append(icon('search', 17));
   document.getElementById('searchBtn').addEventListener('click', () => {
-    const bar = document.getElementById('searchBar');
-    bar.hidden = !bar.hidden;
-    if (!bar.hidden) document.getElementById('searchInput').focus();
+    const open = searchBar.hidden;
+    searchBar.hidden = !open;
+    if (open) {
+      searchInput.focus();
+      searchInput.select();
+    }
   });
-  const input = document.getElementById('searchInput');
-  input.addEventListener('keydown', (e) => {
+  searchGo.append(icon('arrow', 16));
+  searchGo.addEventListener('click', submitSearch);
+  searchInput.addEventListener('input', syncSearchGo);
+  searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      const q = input.value.trim();
-      if (q) location.hash = `#/search?q=${encodeURIComponent(q)}`;
+      e.preventDefault();
+      submitSearch();
     }
     if (e.key === 'Escape') {
-      document.getElementById('searchBar').hidden = true;
-      input.value = '';
+      searchBar.hidden = true;
+      searchInput.value = '';
+      syncSearchGo();
+      searchInput.blur();
     }
   });
+  syncSearchGo();
   document.getElementById('themeBtn').addEventListener('click', cycleTheme);
   document.getElementById('pickBtn').append(icon('image', 17));
   document.getElementById('composeBtn').append(icon('pencil', 20));

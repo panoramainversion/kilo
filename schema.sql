@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_key    TEXT,                             -- 对象存储 key（历史字段；头像现在存 avatar_data）
   avatar_data   TEXT,                             -- 头像本身：data:image/...;base64, 存在库里，不依赖对象存储
   role          TEXT    NOT NULL DEFAULT 'user',  -- admin | user
+  title         TEXT    NOT NULL DEFAULT '',     -- 自定义头衔，空 = 没写
+  title_color   TEXT    NOT NULL DEFAULT '',     -- 头衔颜色 #rrggbb，空 = 用主题色
+  title_on      INTEGER NOT NULL DEFAULT 0,      -- 头衔开关，默认关闭
   pw_hash       TEXT,
   pw_salt       TEXT,
   pw_iter       INTEGER NOT NULL DEFAULT 50000,
@@ -31,7 +34,7 @@ CREATE TABLE IF NOT EXISTS invites (
 );
 CREATE INDEX IF NOT EXISTS idx_invites_user ON invites(user_id);
 
--- 笔记。images 是 JSON 数组：[{"k":"i/202610/xx.webp","w":1600,"h":1200}]
+-- 笔记。images 是 JSON 数组：[{"k":"i/202610/xx.webp","w":1280,"h":1200,"t":"i/202610/xx_t.webp"}]
 CREATE TABLE IF NOT EXISTS notes (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id    INTEGER NOT NULL,

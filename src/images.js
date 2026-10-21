@@ -13,7 +13,14 @@ const MB = 1024 * 1024;
 /** 每小时每人的上传上限，防止被当成图床刷 */
 const HOURLY_LIMIT = 40;
 
-const KEY_RE = /^i\/\d{6}\/[a-f0-9]{16}\.(jpg|png|gif|webp)$/;
+/** 缩略图固定用 WebP，key 由原图推导，不用再存一份数据库记录 */
+const THUMB_MAX_MB = 2;
+
+const KEY_RE = /^i\/\d{6}\/[a-f0-9]{16}(?:_t)?\.(jpg|png|gif|webp)$/;
+
+export function thumbKeyFor(key) {
+  return String(key).replace(/\.(jpg|png|gif|webp)$/i, '_t.webp');
+}
 
 const MAGIC = [
   { mime: 'image/jpeg', ext: 'jpg', test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
@@ -86,6 +93,9 @@ export async function uploadImage(env, user, request, url, ctx) {
   const store = resolveStorage(env, ctx && ctx.settings ? ctx.settings.image_storage : '');
   if (!store) return fail('图片存储还没配置（B2 / KV / R2）', 503);
 
+  const thumbOf = url.searchParams.get('thumb_of');
+  if (thumbOf) return uploadThumb(env, user, request, url, ctx, store, thumbOf);
+
   let maxMb = Number.parseInt(ctx && ctx.settings ? ctx.settings.max_image_mb : '', 10);
   if (!Number.isFinite(maxMb)) {
     const settings = await env.DB.prepare("SELECT v FROM settings WHERE k = 'max_image_mb'").first();
@@ -138,6 +148,43 @@ export async function uploadImage(env, user, request, url, ctx) {
   }
 
   return json({ key, w, h, url: `/i/${key}`, size: buf.byteLength, store: usedStore }, 201);
+}
+
+/** 上传缩略图：不新增 images 记录，key 固定从原图推导，删除时一起清 */
+async function uploadThumb(env, user, request, url, ctx, store, baseKey) {
+  if (!KEY_RE.test(baseKey)) return fail('原图不存在', 404);
+  const owned = await env.DB.prepare('SELECT key FROM images WHERE key = ? AND user_id = ?')
+    .bind(baseKey, user.id).first();
+  if (!owned) return fail('原图不存在', 404);
+
+  const declared = Number(request.headers.get('content-length') || 0);
+  if (declared && declared > THUMB_MAX_MB * MB) {
+    return fail(`缩略图不能超过 ${THUMB_MAX_MB} MB`, 413);
+  }
+  const buf = await request.arrayBuffer();
+  if (buf.byteLength > THUMB_MAX_MB * MB) return fail(`缩略图不能超过 ${THUMB_MAX_MB} MB`, 413);
+  if (buf.byteLength < 128) return fail('缩略图内容为空', 400);
+
+  const kind = sniff(new Uint8Array(buf));
+  if (!kind || kind.mime !== 'image/webp') return fail('缩略图必须是 WebP', 415);
+
+  const key = thumbKeyFor(baseKey);
+  let usedStore;
+  try {
+    usedStore = await putObject(env, key, buf, kind.mime, store);
+  } catch {
+    return fail('缩略图写入失败，稍后再试', 503);
+  }
+
+  if (ctx && typeof caches !== 'undefined' && ctx.waitUntil) {
+    try {
+      const cacheKey = new Request(new URL(`/i/${key}`, url).toString());
+      const cached = imageResponse({ mime: kind.mime, size: buf.byteLength, etag: null, store: usedStore });
+      ctx.waitUntil(caches.default.put(cacheKey, cached).catch(() => {}));
+    } catch { /* ignore */ }
+  }
+
+  return json({ key, size: buf.byteLength, store: usedStore }, 201);
 }
 
 /** 读图：先看边缘缓存，再回当前存储（找不到时回退到其他已配置存储） */

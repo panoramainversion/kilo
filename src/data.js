@@ -92,6 +92,9 @@ export function publicUser(row) {
     bio: row.bio || '',
     avatar: avatarOf(row),
     role: row.role,
+    title: row.title || '',
+    title_color: row.title_color || '',
+    title_on: !!row.title_on,
     created_at: row.created_at,
   };
 }
@@ -152,7 +155,17 @@ export function parseImages(raw) {
     return arr
       .filter((x) => x && typeof x.k === 'string')
       .slice(0, 9)
-      .map((x) => ({ k: x.k, w: Number(x.w) || 0, h: Number(x.h) || 0, url: `/i/${x.k}` }));
+      .map((x) => {
+        const t = typeof x.t === 'string' && x.t.startsWith('i/') ? x.t : '';
+        return {
+          k: x.k,
+          w: Number(x.w) || 0,
+          h: Number(x.h) || 0,
+          ...(t ? { t } : {}),
+          url: `/i/${x.k}`,
+          thumb: t ? `/i/${t}` : '',
+        };
+      });
   } catch {
     return [];
   }
@@ -174,6 +187,9 @@ export function noteToJson(row) {
       display_name: row.display_name,
       avatar: avatarOf(row),
       role: row.role,
+      title: row.title || '',
+      title_color: row.title_color || '',
+      title_on: !!row.title_on,
     },
   };
 }
@@ -181,6 +197,7 @@ export function noteToJson(row) {
 const NOTE_SELECT = `
   SELECT n.id, n.user_id, n.content, n.images, n.created_at, n.updated_at, n.pinned,
          u.username, u.display_name, u.avatar_key, u.avatar_data, u.role,
+         u.title, u.title_color, u.title_on,
          (SELECT COUNT(*) FROM comments c WHERE c.note_id = n.id) AS comment_count
   FROM notes n JOIN users u ON u.id = n.user_id`;
 
@@ -207,7 +224,9 @@ export async function listNotes(env, { limit = 20, offset = 0, tag = '', q = '',
   if (withComments && rows.length) {
     const ids = rows.map((r) => r.id);
     const { results: cs } = await env.DB.prepare(
-      `SELECT c.id, c.note_id, c.content, c.created_at, u.username, u.display_name, u.avatar_key, u.avatar_data
+      `SELECT c.id, c.note_id, c.content, c.created_at,
+              u.username, u.display_name, u.avatar_key, u.avatar_data,
+              u.role, u.title, u.title_color, u.title_on
        FROM comments c JOIN users u ON u.id = c.user_id
        WHERE c.note_id IN (${ids.map(() => '?').join(',')})
        ORDER BY c.created_at ASC`,
@@ -223,6 +242,10 @@ export async function listNotes(env, { limit = 20, offset = 0, tag = '', q = '',
           username: c.username,
           display_name: c.display_name,
           avatar: avatarOf(c),
+          role: c.role,
+          title: c.title || '',
+          title_color: c.title_color || '',
+          title_on: !!c.title_on,
         },
       });
     }
@@ -247,7 +270,9 @@ export async function getNote(env, id) {
   const row = await env.DB.prepare(`${NOTE_SELECT} WHERE n.id = ?`).bind(id).first();
   if (!row) return null;
   const { results } = await env.DB.prepare(
-    `SELECT c.id, c.content, c.created_at, u.username, u.display_name, u.avatar_key, u.avatar_data
+    `SELECT c.id, c.content, c.created_at,
+            u.username, u.display_name, u.avatar_key, u.avatar_data,
+            u.role, u.title, u.title_color, u.title_on
      FROM comments c JOIN users u ON u.id = c.user_id
      WHERE c.note_id = ? ORDER BY c.created_at ASC`,
   ).bind(id).all();
@@ -261,6 +286,10 @@ export async function getNote(env, id) {
         username: c.username,
         display_name: c.display_name,
         avatar: avatarOf(c),
+        role: c.role,
+        title: c.title || '',
+        title_color: c.title_color || '',
+        title_on: !!c.title_on,
       },
     })),
   };

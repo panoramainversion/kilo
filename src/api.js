@@ -10,7 +10,7 @@ import {
   avatarOf, countNotes, countUsers, createInvite, createUser, findInvite, getNote, getSettings,
   getUserById, getUserByName, listNotes, listUsers, noteToJson, publicUser, saveSettings, stats,
 } from './data.js';
-import { deleteImage, sniff, uploadImage } from './images.js';
+import { deleteImage, sniff, thumbKeyFor, uploadImage } from './images.js';
 import { storageInfo } from './storage.js';
 
 /** 人数上限：后台可改，1–50，没设过就退回环境变量 / 8 */
@@ -70,7 +70,13 @@ async function normalizeImages(env, userId, list) {
     const row = await env.DB.prepare('SELECT key, w, h FROM images WHERE key = ? AND user_id = ?')
       .bind(key, userId).first();
     if (!row) continue;
-    out.push({ k: row.key, w: row.w || 0, h: row.h || 0 });
+    const t = typeof item.t === 'string' && item.t === thumbKeyFor(row.key) ? item.t : '';
+    out.push({
+      k: row.key,
+      w: row.w || 0,
+      h: row.h || 0,
+      ...(t ? { t } : {}),
+    });
   }
   return out;
 }
@@ -233,6 +239,15 @@ export async function updateProfile(ctx) {
   if (!display) return fail('名字不能为空');
   const bio = String(body.bio ?? ctx.me.bio).trim().slice(0, 200);
 
+  const title = String(body.title ?? ctx.me.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 12);
+  const rawColor = String(body.title_color ?? ctx.me.title_color ?? '').trim();
+  if (rawColor && !/^#[0-9a-fA-F]{6}$/.test(rawColor)) return fail('头衔颜色格式不对');
+  const titleColor = rawColor.toLowerCase();
+  const titleOn = body.title_on === undefined
+    ? (ctx.me.title_on ? 1 : 0)
+    : (body.title_on === true || body.title_on === 1 || body.title_on === '1' ? 1 : 0);
+  if (titleOn && !title) return fail('先写一个头衔再打开');
+
   // 头像有两种存法：avatar_data 直接存库里（默认，不依赖 R2），avatar_key 存 R2
   let avatarData = ctx.me.avatar_data || null;
   if (body.avatar_data !== undefined) {
@@ -267,8 +282,8 @@ export async function updateProfile(ctx) {
   }
 
   await ctx.env.DB.prepare(
-    'UPDATE users SET display_name = ?, bio = ?, avatar_key = ?, avatar_data = ? WHERE id = ?',
-  ).bind(display, bio, avatarKey, avatarData, ctx.me.id).run();
+    'UPDATE users SET display_name = ?, bio = ?, title = ?, title_color = ?, title_on = ?, avatar_key = ?, avatar_data = ? WHERE id = ?',
+  ).bind(display, bio, title, titleColor, titleOn, avatarKey, avatarData, ctx.me.id).run();
 
   const fresh = await getUserById(ctx.env, ctx.me.id);
   return json({ ok: true, user: publicUser(fresh) });
@@ -399,7 +414,10 @@ export async function deleteNote(ctx, id) {
     ctx.env.DB.prepare('DELETE FROM comments WHERE note_id = ?').bind(row.id),
     ctx.env.DB.prepare('DELETE FROM notes WHERE id = ?').bind(row.id),
   ]);
-  await Promise.all(imgs.map((im) => deleteImage(ctx.env, im.k, ctx.url.origin)));
+  await Promise.all(imgs.flatMap((im) => {
+    const keys = [im.k, im.t || thumbKeyFor(im.k)].filter(Boolean);
+    return keys.map((key) => deleteImage(ctx.env, key, ctx.url.origin));
+  }));
 
   return ok();
 }
@@ -433,6 +451,10 @@ export async function addComment(ctx, noteId) {
         username: ctx.me.username,
         display_name: ctx.me.display_name,
         avatar: avatarOf(ctx.me),
+        role: ctx.me.role,
+        title: ctx.me.title || '',
+        title_color: ctx.me.title_color || '',
+        title_on: !!ctx.me.title_on,
       },
     },
   }, 201);
@@ -475,6 +497,9 @@ export async function adminUsers(ctx) {
       role: r.role,
       bio: r.bio || '',
       avatar: avatarOf(r),
+      title: r.title || '',
+      title_color: r.title_color || '',
+      title_on: !!r.title_on,
       created_at: r.created_at,
       last_login_at: r.last_login_at,
       active: !!r.pw_hash,
@@ -557,7 +582,10 @@ export async function adminDeleteUser(ctx, id) {
   for (const n of notes || []) {
     try {
       const imgs = JSON.parse(n.images || '[]');
-      await Promise.all(imgs.map((im) => deleteImage(ctx.env, im.k, ctx.url.origin)));
+      await Promise.all(imgs.flatMap((im) => {
+        const keys = [im.k, im.t || thumbKeyFor(im.k)].filter(Boolean);
+        return keys.map((key) => deleteImage(ctx.env, key, ctx.url.origin));
+      }));
     } catch { /* ignore */ }
   }
   if (user.avatar_key) await deleteImage(ctx.env, user.avatar_key, ctx.url.origin);
