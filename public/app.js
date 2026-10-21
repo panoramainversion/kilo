@@ -227,10 +227,37 @@ function replyDialog(note, onAdded) {
 
 /* ── 条目卡片 ─────────────────────────────────────────────── */
 
-const DEFAULT_TITLE_COLOR = '#8a6f5a';
+const TITLE_COLORS = [
+  { name: '红', value: '#d45d5d' },
+  { name: '橙', value: '#dd8a4b' },
+  { name: '黄', value: '#d1b23f' },
+  { name: '绿', value: '#5fa86f' },
+  { name: '青', value: '#4aa6a6' },
+  { name: '蓝', value: '#5b84c4' },
+  { name: '紫', value: '#9068b8' },
+  { name: '黑', value: '#2b2b2b' },
+  { name: '白', value: '#f5f1e8' },
+];
+const DEFAULT_TITLE_COLOR = '#2b2b2b';
 
 function safeTitleColor(color) {
   return /^#[0-9a-f]{6}$/i.test(String(color || '')) ? color : '';
+}
+
+// 黑白标题在浅色/深色主题下都需要反色实底，避免文字与背景融在一起。
+function titleTone(color) {
+  const value = safeTitleColor(color);
+  if (!value) return '';
+  const r = parseInt(value.slice(1, 3), 16) / 255;
+  const g = parseInt(value.slice(3, 5), 16) / 255;
+  const b = parseInt(value.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const sat = max === 0 ? 0 : (max - min) / max;
+  const light = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  if (sat < 0.12 && light < 0.24) return 'black';
+  if (sat < 0.12 && light > 0.8) return 'white';
+  return '';
 }
 
 function randomMutedColor() {
@@ -255,6 +282,7 @@ function nameBadges(user) {
     out.push(el('span', {
       class: 'user-title',
       text: user.title,
+      'data-mono': titleTone(color) || null,
       style: `--tag-color:${color}`,
     }));
   }
@@ -750,20 +778,6 @@ async function renderMe() {
   const bioInput = el('textarea', { class: 'textarea', maxlength: '200' });
   bioInput.value = me.bio || '';
 
-  const TITLE_COLORS = [
-    { name: '茶褐', value: '#8a6f5a' },
-    { name: '陶土', value: '#986f5f' },
-    { name: '赭红', value: '#8d5f54' },
-    { name: '麦金', value: '#97835f' },
-    { name: '苔绿', value: '#72806b' },
-    { name: '松灰', value: '#66756b' },
-    { name: '雾蓝', value: '#687b8a' },
-    { name: '黛青', value: '#5f737a' },
-    { name: '藕紫', value: '#806f7f' },
-    { name: '灰紫', value: '#756879' },
-    { name: '岩灰', value: '#72706b' },
-    { name: '墨褐', value: '#6b5e55' },
-  ];
   let titleColorValue = safeTitleColor(me.title_color) || DEFAULT_TITLE_COLOR;
 
   const titleInput = el('input', {
@@ -787,15 +801,33 @@ async function renderMe() {
     me.role === 'admin' ? verifyBadge('管理员', 15) : null,
     previewTitle,
   );
-  const swatches = TITLE_COLORS.map((c) => el('button', {
+  const swatches = TITLE_COLORS.map((c) => {
+    const tone = titleTone(c.value);
+    return el('button', {
+      type: 'button',
+      class: 'title-swatch' + (tone ? ` is-${tone} is-mono` : ''),
+      title: c.name,
+      'aria-label': c.name,
+      'aria-pressed': 'false',
+      style: `--swatch:${c.value}`,
+      onclick: () => { titleColorValue = c.value; syncTitleEditor(); },
+    });
+  });
+  const customColorInput = el('input', {
+    type: 'color',
+    class: 'file-hidden',
+    value: safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR,
+    'aria-label': '自定义头衔颜色',
+  });
+  const customColorBtn = el('button', {
     type: 'button',
-    class: 'title-swatch',
-    title: c.name,
-    'aria-label': c.name,
-    'aria-pressed': 'false',
-    style: `--swatch:${c.value}`,
-    onclick: () => { titleColorValue = c.value; syncTitleEditor(); },
-  }));
+    class: 'title-random title-custom',
+    title: '自定义颜色',
+    onclick: () => {
+      customColorInput.value = safeTitleColor(titleColorValue) || DEFAULT_TITLE_COLOR;
+      customColorInput.click();
+    },
+  }, icon('palette', 14), '自定义');
   const randomColorBtn = el('button', {
     type: 'button',
     class: 'title-random',
@@ -811,14 +843,23 @@ async function renderMe() {
       previewTitle.style.removeProperty('--tag-color');
       titleSwitch.style.removeProperty('--tag-color');
     }
+    const tone = titleTone(color);
+    if (tone) previewTitle.dataset.mono = tone;
+    else delete previewTitle.dataset.mono;
     previewTitle.textContent = titleInput.value.trim() || '头衔';
     previewTitle.classList.toggle('is-off', !titleOn.checked || !titleInput.value.trim());
+    const paletteMatch = TITLE_COLORS.some((c) => c.value.toLowerCase() === color.toLowerCase());
+    customColorBtn.classList.toggle('is-active', !!color && !paletteMatch);
     swatches.forEach((btn, i) => {
       const active = TITLE_COLORS[i].value.toLowerCase() === color.toLowerCase();
       btn.classList.toggle('is-active', active);
       btn.setAttribute('aria-pressed', String(active));
     });
   };
+  customColorInput.addEventListener('input', () => {
+    titleColorValue = customColorInput.value;
+    syncTitleEditor();
+  });
   nameInput.addEventListener('input', () => {
     previewName.textContent = nameInput.value.trim() || me.display_name;
   });
@@ -900,7 +941,11 @@ async function renderMe() {
       titleInput,
       el('div', { class: 'title-color-head' },
         el('span', { class: 'title-color-label', text: '颜色' }),
-        randomColorBtn,
+        el('div', { class: 'title-color-actions' },
+          customColorBtn,
+          randomColorBtn,
+          customColorInput,
+        ),
       ),
       el('div', { class: 'title-swatches', role: 'group', 'aria-label': '头衔颜色' }, swatches),
       titlePreview,

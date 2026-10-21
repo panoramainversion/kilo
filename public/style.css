@@ -361,6 +361,16 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.user-title[data-mono="black"] {
+  border-color: color-mix(in srgb, #2b2b2b 70%, var(--fg));
+  background: #2b2b2b;
+  color: #f5f1e8;
+}
+.user-title[data-mono="white"] {
+  border-color: color-mix(in srgb, #f5f1e8 55%, var(--fg));
+  background: #f5f1e8;
+  color: #2b2b2b;
+}
 .user-title.is-off { opacity: 0.38; }
 
 .note-tools {
@@ -451,7 +461,7 @@ body {
   margin-top: 10px;
   display: grid;
   gap: 5px;
-  max-width: 80%;
+  max-width: 25%;
 }
 .imgs.full { max-width: 100%; }
 .imgs.n1 { grid-template-columns: minmax(0, 1fr); justify-items: start; }
@@ -901,6 +911,7 @@ body {
   margin: 11px 0 7px;
 }
 .title-color-label { font-size: 12.5px; color: var(--muted); }
+.title-color-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .title-random {
   display: inline-flex;
   align-items: center;
@@ -917,6 +928,11 @@ body {
   transition: color 0.2s, border-color 0.2s, background-color 0.2s;
 }
 .title-random:hover { color: var(--fg); border-color: color-mix(in srgb, var(--fg) 28%, transparent); background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.title-random.is-active {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--fg) 38%, transparent);
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+}
 .title-random svg { opacity: 0.72; }
 .title-swatches { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .title-swatch {
@@ -931,8 +947,13 @@ body {
   transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
 }
 .title-swatch:hover { transform: translateY(-1px) scale(1.06); }
+.title-swatch.is-black { border-color: color-mix(in srgb, var(--fg) 24%, #2b2b2b); }
+.title-swatch.is-white { border-color: color-mix(in srgb, var(--fg) 20%, #f5f1e8); }
 .title-swatch.is-active {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--swatch);
+}
+.title-swatch.is-mono.is-active {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px color-mix(in srgb, var(--fg) 52%, transparent);
 }
 .title-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .title-preview {
