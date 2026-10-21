@@ -554,19 +554,33 @@ body {
 
 .compose {
   position: fixed;
-  right: max(18px, env(safe-area-inset-right));
-  bottom: calc(20px + env(safe-area-inset-bottom));
+  inset: 0;
   z-index: 30;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
   pointer-events: none;
 }
-.compose > * { pointer-events: auto; }
+.compose-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--overlay);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: fade 0.22s var(--ease);
+  pointer-events: auto;
+}
+.compose-shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(64px, 14vh, 150px) 18px 18px;
+  pointer-events: none;
+}
 
 .compose-fab {
-  position: relative;
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: calc(20px + env(safe-area-inset-bottom));
   width: 54px;
   height: 54px;
   padding: 0;
@@ -577,6 +591,7 @@ body {
   display: grid;
   place-items: center;
   cursor: pointer;
+  pointer-events: auto;
   box-shadow: var(--shadow);
   transition: background-color 0.2s, transform 0.25s var(--ease), opacity 0.18s var(--ease), visibility 0.18s;
 }
@@ -601,14 +616,16 @@ body {
 }
 
 .composer {
-  width: min(440px, calc(100vw - 36px));
-  padding: 12px 14px;
+  width: min(460px, 100%);
+  padding: 14px 18px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: var(--shadow);
-  backdrop-filter: blur(14px);
-  animation: slideUp 0.28s var(--ease);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  pointer-events: auto;
+  animation: composeIn 0.26s var(--ease);
 }
 .composer.dragover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .composer-head {
@@ -618,10 +635,10 @@ body {
   margin: -2px 0 6px;
 }
 .composer-title {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--faint);
+  font-family: var(--serif);
+  font-size: 13.5px;
+  letter-spacing: 0.07em;
+  color: var(--muted);
 }
 .composer textarea {
   display: block;
@@ -1061,6 +1078,10 @@ body {
   box-shadow: var(--shadow);
   animation: pop 0.3s var(--ease);
 }
+.modal.modal-top {
+  place-items: start center;
+  padding-top: clamp(72px, 16vh, 170px);
+}
 .modal-title { margin: 0 0 6px; font-family: var(--serif); font-size: 20px; font-weight: 500; }
 .modal-sub { margin: 0 0 16px; font-size: 13.5px; color: var(--muted); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
@@ -1100,6 +1121,12 @@ body {
   from { opacity: 0; transform: translateY(22px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes composeIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.kb-smooth { transition: transform 0.26s var(--ease); }
 @keyframes blink {
   0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
   40% { opacity: 1; transform: translateY(-3px); }
@@ -1131,19 +1158,26 @@ body {
   .note { padding: 16px 0; }
   .note-body { font-size: 16px; line-height: 1.75; }
   .imgs.n1 button img { max-height: 62vh; }
-  .compose {
-    left: 14px;
+  .compose-shell { padding: max(16vh, 88px) 14px 14px; }
+  .composer { width: 100%; }
+  .compose-fab {
     right: 14px;
     bottom: calc(14px + env(safe-area-inset-bottom));
+    width: 50px;
+    height: 50px;
   }
-  .composer { width: 100%; }
-  .compose-fab { width: 50px; height: 50px; }
+  .modal.modal-top { padding-top: max(14vh, 80px); }
   .thumb { width: 56px; height: 56px; }
   .lb-prev { left: 8px; }
   .lb-next { right: 8px; }
   .modal { padding: 16px; }
   .profile { gap: 12px; }
   .profile h1 { font-size: 20px; }
+}
+
+@media (hover: none) {
+  /* 小于 16px 时 iOS 会在聚焦输入框时自动放大页面 */
+  .input, .textarea, .search-input { font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

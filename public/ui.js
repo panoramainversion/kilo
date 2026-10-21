@@ -173,6 +173,86 @@ export function fullTime(ms) {
   return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())} ${p(t.getHours())}:${p(t.getMinutes())}`;
 }
 
+/* ── 软键盘避让 ───────────────────────────────────────────── */
+
+const kbPanels = new Map(); // 元素 → 当前上移的像素
+let kbWatching = false;
+let kbRaf = 0;
+
+function kbGeom(panel) {
+  const parent = panel.offsetParent;
+  const parentTop = parent ? parent.getBoundingClientRect().top : 0;
+  return { top: parentTop + panel.offsetTop, height: panel.offsetHeight };
+}
+
+function kbApply(panel, lift) {
+  const prev = kbPanels.get(panel) || 0;
+  const next = Math.max(0, Math.round(lift));
+  if (prev === next) return;
+  kbPanels.set(panel, next);
+  panel.style.transform = next ? `translateY(-${next}px)` : '';
+}
+
+function kbSync() {
+  kbRaf = 0;
+  if (!kbPanels.size) return;
+  const vv = window.visualViewport;
+  const layoutH = window.innerHeight;
+  const visibleBottom = vv ? Math.min(layoutH, vv.offsetTop + vv.height) : layoutH;
+  const covered = layoutH - visibleBottom;
+  for (const panel of kbPanels.keys()) {
+    if (!panel.isConnected || panel.hidden) { kbApply(panel, 0); continue; }
+    const active = document.activeElement;
+    const editing = !!active && panel.contains(active)
+      && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT');
+    // 不到 80px 的变化多半只是地址栏伸缩，不应跟着动
+    if (!editing || covered < 80) { kbApply(panel, 0); continue; }
+    const { top, height } = kbGeom(panel);
+    const need = top + height - (visibleBottom - 14);
+    const max = Math.max(0, top - 8);
+    kbApply(panel, Math.min(Math.max(0, need), max));
+  }
+}
+
+function kbSchedule() {
+  if (kbRaf) return;
+  kbRaf = requestAnimationFrame(kbSync);
+}
+
+function kbWatch() {
+  if (kbWatching) return;
+  kbWatching = true;
+  window.addEventListener('resize', kbSchedule);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', kbSchedule);
+    window.visualViewport.addEventListener('scroll', kbSchedule);
+  }
+  document.addEventListener('focusin', () => {
+    kbSchedule();
+    setTimeout(kbSchedule, 180);
+    setTimeout(kbSchedule, 420);
+  });
+  document.addEventListener('focusout', () => {
+    setTimeout(kbSchedule, 120);
+    setTimeout(kbSchedule, 320);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) kbSchedule();
+  });
+}
+
+export function initSoftKeyboard(panel) {
+  if (!panel) return { sync: kbSchedule, reset: () => {} };
+  if (!kbPanels.has(panel)) kbPanels.set(panel, 0);
+  panel.classList.add('kb-smooth');
+  kbWatch();
+  if (window.ResizeObserver) new ResizeObserver(kbSchedule).observe(panel);
+  return {
+    sync: kbSchedule,
+    reset: () => kbApply(panel, 0),
+  };
+}
+
 /* ── 提示 / 弹层 ──────────────────────────────────────────── */
 
 let toastTimer = null;
@@ -191,9 +271,12 @@ export function toast(msg, ms = 2200) {
 
 let modalCloser = null;
 let modalReturnFocus = null;
-export function openModal(build) {
+let modalKb = null;
+export function openModal(build, opts = {}) {
+  const { focus = true, top = false } = opts;
   const wrap = document.getElementById('modal');
   const card = document.getElementById('modalCard');
+  if (!modalKb) modalKb = initSoftKeyboard(card);
   if (wrap.hidden) modalReturnFocus = document.activeElement;
   if (modalCloser) document.removeEventListener('keydown', modalCloser);
   clear(card);
@@ -201,8 +284,11 @@ export function openModal(build) {
   const node = build(api);
   if (node) card.append(node);
   wrap.hidden = false;
+  wrap.classList.toggle('modal-top', !!top);
+  modalKb.reset();
   const first = card.querySelector('input, textarea, button');
-  if (first) setTimeout(() => first.focus(), 60);
+  if (focus && first) setTimeout(() => { if (!wrap.hidden) first.focus(); }, 60);
+  if (!focus) modalKb?.sync();
   modalCloser = (e) => { if (e.key === 'Escape') closeModal(); };
   document.addEventListener('keydown', modalCloser);
 }
@@ -210,12 +296,18 @@ export function openModal(build) {
 export function closeModal() {
   const wrap = document.getElementById('modal');
   if (!wrap || wrap.hidden) return;
+  const card = document.getElementById('modalCard');
+  if (card.contains(document.activeElement) && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
+  }
   wrap.hidden = true;
+  wrap.classList.remove('modal-top');
+  modalKb?.reset();
   if (modalCloser) document.removeEventListener('keydown', modalCloser);
   modalCloser = null;
   const back = modalReturnFocus;
   modalReturnFocus = null;
-  if (back && document.contains(back) && typeof back.focus === 'function') back.focus();
+  if (back && document.contains(back) && typeof back.focus === 'function') back.focus({ preventScroll: true });
 }
 
 export function confirmModal(title, sub, okText = '确定', danger = false) {

@@ -5,7 +5,7 @@
 import { api, ApiError } from './api.js';
 import {
   el, clear, icon, renderBody, relTime, fullTime, toast, openModal, closeModal,
-  confirmModal, openLightbox, initLightbox, avatarEl, bytes, copyText,
+  confirmModal, openLightbox, initLightbox, avatarEl, bytes, copyText, initSoftKeyboard,
 } from './ui.js';
 
 const state = {
@@ -213,7 +213,7 @@ function replyDialog(note, onAdded) {
       el('button', { class: 'btn-ghost', text: '取消', onclick: close }),
       sendBtn,
     ),
-  ));
+  ), { focus: !isTouchUi(), top: true });
 }
 
 /* ── 条目卡片 ─────────────────────────────────────────────── */
@@ -1345,6 +1345,30 @@ async function uploadFile(file) {
   return res;
 }
 
+const COMPOSER_VERSES = [
+  '行到水穷处，坐看云起时',
+  '人间有味是清欢',
+  '此心安处是吾乡',
+  '落花无言，人淡如菊',
+  '晚来天欲雪，能饮一杯无',
+  '满船清梦压星河',
+  '一蓑烟雨任平生',
+  '云深不知处',
+  '山气日夕佳，飞鸟相与还',
+  '当时明月在，曾照彩云归',
+];
+let lastVerse = -1;
+let composerKb = null;
+
+function setComposerVerse() {
+  const node = document.getElementById('composerTitle');
+  if (!node) return;
+  let i = Math.floor(Math.random() * COMPOSER_VERSES.length);
+  if (i === lastVerse) i = (i + 1) % COMPOSER_VERSES.length;
+  lastVerse = i;
+  node.textContent = COMPOSER_VERSES[i];
+}
+
 function renderDock() {
   const dock = document.getElementById('dock');
   const pick = document.getElementById('pickBtn');
@@ -1369,17 +1393,33 @@ function setComposerOpen(open) {
   const dock = document.getElementById('dock');
   const panel = document.getElementById('composerPanel');
   const fab = document.getElementById('composeBtn');
+  const scrim = document.getElementById('composeScrim');
   if (!dock || !panel || !fab || (open && dock.hidden)) return;
   fab.classList.remove('tucked');
-  panel.hidden = !open;
-  fab.hidden = open;
-  fab.setAttribute('aria-expanded', open ? 'true' : 'false');
   if (open) {
+    setComposerVerse();
+    panel.hidden = false;
+    if (scrim) scrim.hidden = false;
+    fab.hidden = true;
+    fab.setAttribute('aria-expanded', 'true');
+    composerKb?.reset();
     autoGrow();
-    document.getElementById('composer')?.focus();
+    // 触屏上只负责打开面板，等用户点输入框再弹键盘
+    if (!isTouchUi()) {
+      document.getElementById('composer')?.focus({ preventScroll: true });
+      composerKb?.sync();
+    }
   } else {
+    if (panel.contains(document.activeElement) && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+    panel.hidden = true;
+    if (scrim) scrim.hidden = true;
+    fab.hidden = false;
+    fab.setAttribute('aria-expanded', 'false');
     panel.classList.remove('dragover');
-    if (panel.contains(document.activeElement)) fab.focus();
+    composerKb?.reset();
+    if (!isTouchUi()) fab.focus({ preventScroll: true });
   }
 }
 
@@ -1495,6 +1535,7 @@ function initDock() {
   const dock = document.getElementById('dock');
   const panel = document.getElementById('composerPanel');
   const picker = document.getElementById('filePicker');
+  composerKb = initSoftKeyboard(panel);
 
   ta.addEventListener('input', () => {
     autoGrow();
@@ -1516,16 +1557,20 @@ function initDock() {
 
   document.getElementById('composeBtn').addEventListener('click', () => setComposerOpen(true));
   document.getElementById('composeClose').addEventListener('click', () => setComposerOpen(false));
+  document.getElementById('composeScrim').addEventListener('click', () => setComposerOpen(false));
 
-  ['dragenter', 'dragover'].forEach((ev) => ta.addEventListener(ev, (e) => {
+  ['dragenter', 'dragover'].forEach((ev) => dock.addEventListener(ev, (e) => {
+    if (panel.hidden) return;
     e.preventDefault();
     panel.classList.add('dragover');
   }));
-  ['dragleave', 'drop'].forEach((ev) => ta.addEventListener(ev, (e) => {
+  ['dragleave', 'drop'].forEach((ev) => dock.addEventListener(ev, (e) => {
+    if (panel.hidden) return;
     e.preventDefault();
     panel.classList.remove('dragover');
   }));
-  ta.addEventListener('drop', (e) => {
+  dock.addEventListener('drop', (e) => {
+    if (panel.hidden) return;
     const files = Array.from(e.dataTransfer?.files || []);
     if (files.length) addFiles(files);
   });
